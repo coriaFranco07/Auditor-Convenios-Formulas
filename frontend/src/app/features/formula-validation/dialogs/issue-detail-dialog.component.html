@@ -1,0 +1,163 @@
+<div class="detail-header">
+  <div>
+    <h2 mat-dialog-title>{{ issue.title }}</h2>
+  </div>
+  <button mat-icon-button type="button" matTooltip="Cerrar" (click)="close()">
+    <mat-icon>close</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content>
+  <section *ngIf="showAiGuide()" class="ai-guide">
+    <div class="ai-guide-header">
+      <div>
+        <span>Explicacion IA para contadora</span>
+        <h3>Lectura humana del hallazgo</h3>
+      </div>
+      <mat-progress-spinner *ngIf="loadingAiExplanation" diameter="24" mode="indeterminate"></mat-progress-spinner>
+    </div>
+
+    <ng-container *ngIf="issue.aiExplanation; else aiPending">
+      <p class="ai-summary">{{ issue.aiExplanation.summary }}</p>
+      <div class="ai-block">
+        <strong>Impacto</strong>
+        <p>{{ issue.aiExplanation.impact }}</p>
+      </div>
+      <div class="ai-block">
+        <strong>Pasos sugeridos</strong>
+        <ol>
+          <li *ngFor="let step of issue.aiExplanation.reviewSteps">{{ step }}</li>
+        </ol>
+      </div>
+      <div class="ai-block">
+        <strong>Accion recomendada</strong>
+        <p>{{ issue.aiExplanation.suggestedAction }}</p>
+      </div>
+      <small>{{ issue.aiExplanation.confidenceNote }} Modelo: {{ issue.aiExplanation.model }}</small>
+    </ng-container>
+
+    <ng-template #aiPending>
+      <p *ngIf="loadingAiExplanation">Gemini esta preparando una explicacion mas humana con el contexto del PDF.</p>
+      <p *ngIf="!loadingAiExplanation && aiExplanationError">{{ aiExplanationError }}</p>
+      <button
+        *ngIf="!loadingAiExplanation && aiExplanationError"
+        mat-stroked-button
+        type="button"
+        (click)="loadAiExplanation()"
+      >
+        <mat-icon>auto_awesome</mat-icon>
+        Reintentar IA
+      </button>
+    </ng-template>
+  </section>
+
+  <section *ngIf="issue.replacementSuggestions?.length" class="replacement-guide">
+    <span>Sugerencias para revisar</span>
+    <h3>Posibles reemplazos</h3>
+    <p>
+      El sistema encontro referencias existentes que podrian reemplazar el dato faltante. No se corrige automatico:
+      confirmar contra el criterio funcional antes de modificar el Excel.
+    </p>
+
+    <article *ngFor="let suggestion of issue.replacementSuggestions" class="replacement-card">
+      <div class="replacement-main">
+        <strong>{{ suggestion.token }} - {{ suggestion.label }}</strong>
+        <span [ngClass]="'confidence-' + suggestion.confidence.toLowerCase()">Confianza {{ suggestion.confidence }}</span>
+      </div>
+      <p>{{ suggestion.reason }}</p>
+      <small>{{ locationLabel(suggestion.sheet, suggestion.row, suggestion.cell) || 'Ubicacion no disponible' }}</small>
+      <code *ngIf="suggestion.formula">{{ suggestion.formula }}</code>
+    </article>
+  </section>
+
+  <section *ngIf="hasAccountingGuide()" class="accounting-guide">
+    <span>Guia para quien carga el Excel</span>
+    <h3>Que significa</h3>
+    <p>{{ issue.message }}</p>
+    <p>{{ issue.explanation }}</p>
+
+    <ng-container *ngIf="issue.dependencyDetails?.length">
+      <h3>Donde revisar</h3>
+      <ol class="dependency-steps">
+        <li *ngFor="let detail of issue.dependencyDetails">
+          <strong>{{ detail.label }}</strong>
+          <small>{{ locationLabel(detail.sheet, detail.row, detail.cell) }}</small>
+          <div *ngIf="detail.formula" class="formula-pair">
+            <div>
+              <span>Formula original</span>
+              <code>{{ detail.formula }}</code>
+            </div>
+            <div class="formula-readable">
+              <span>Lectura humana</span>
+              <p>{{ readableFormula(detail.formula) }}</p>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </ng-container>
+
+    <h3>Que hacer</h3>
+    <p>{{ issue.recommendation || 'Revisar la fila indicada y corregir el dato o formula observado.' }}</p>
+  </section>
+
+  <dl class="detail-grid">
+    <div>
+      <dt>Hoja</dt>
+      <dd>{{ issue.sheet || '-' }}</dd>
+    </div>
+    <div>
+      <dt>Fila</dt>
+      <dd>{{ issue.row || '-' }}</dd>
+    </div>
+    <div>
+      <dt>Columna</dt>
+      <dd>{{ issue.column || '-' }}</dd>
+    </div>
+    <div>
+      <dt>Celda</dt>
+      <dd class="font-mono">{{ issue.cell || '-' }}</dd>
+    </div>
+    <div>
+      <dt>Entidad afectada</dt>
+      <dd>{{ entityLabel() || '-' }}</dd>
+    </div>
+  </dl>
+
+  <section *ngIf="issue.formula" class="detail-section">
+    <h3>Formula completa</h3>
+    <pre>{{ issue.formula }}</pre>
+  </section>
+
+  <section *ngIf="issue.invalidFragment" class="detail-section">
+    <h3>Fragmento invalido</h3>
+    <code>{{ issue.invalidFragment }}</code>
+  </section>
+
+  <section class="detail-section">
+    <h3>Explicacion del control</h3>
+    <p>{{ issue.explanation }}</p>
+  </section>
+
+  <section *ngIf="issue.recommendation" class="detail-section">
+    <h3>Recomendacion del sistema</h3>
+    <p>{{ issue.recommendation }}</p>
+  </section>
+
+  <section *ngIf="issue.dependencyPath?.length && !issue.dependencyDetails?.length" class="detail-section">
+    <h3>Ruta de dependencia</h3>
+    <p class="dependency-path">{{ issue.dependencyPath?.join(' -> ') }}</p>
+  </section>
+
+  <section *ngIf="issue.relatedLocations?.length && !issue.dependencyDetails?.length && !isDuplicateIssue()" class="detail-section">
+    <h3>Ubicaciones relacionadas</h3>
+    <ul>
+      <li *ngFor="let location of issue.relatedLocations">
+        {{ location.sheet }} fila {{ location.row }} <span *ngIf="location.cell">({{ location.cell }})</span>
+      </li>
+    </ul>
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-flat-button color="primary" type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>

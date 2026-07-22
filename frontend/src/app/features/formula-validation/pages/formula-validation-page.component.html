@@ -1,0 +1,202 @@
+<main class="app-shell">
+  <aside class="app-rail" aria-label="Navegacion principal">
+    <div class="brand-unit">
+      <img class="brand-logo" src="assets/logo.png" alt="e-Sueldos" />
+      <div>
+        <span>Auditoria de formulas</span>
+        <strong>Control de liquidacion</strong>
+      </div>
+    </div>
+
+    <nav class="rail-nav">
+      <button
+        *ngFor="let module of modules"
+        type="button"
+        [class.active]="activeView === module.id"
+        [disabled]="isModuleDisabled(module)"
+        (click)="selectView(module.id)"
+      >
+        <mat-icon>{{ module.icon }}</mat-icon>
+        <span>
+          <strong>{{ module.title }}</strong>
+          <small>{{ module.caption }}</small>
+        </span>
+      </button>
+    </nav>
+
+    <div class="rail-file" *ngIf="result">
+      <span>Archivo activo</span>
+      <strong>{{ result.fileName }}</strong>
+    </div>
+  </aside>
+
+  <section class="main-shell">
+    <header class="command-bar">
+      <div class="command-title">
+        <span *ngIf="activeView === 'translator' && currentModule.caption" class="eyebrow-label">{{ currentModule.caption }}</span>
+        <h1>{{ currentModule.title }}</h1>
+        <span *ngIf="activeView !== 'translator' && currentModule.caption">{{ currentModule.caption }}</span>
+      </div>
+
+      <div class="command-actions">
+        <input #headerFileInput type="file" accept=".xlsx" class="hidden-file-input" (change)="onHeaderFileSelected($event)" />
+        <button
+          mat-stroked-button
+          type="button"
+          class="header-export-button"
+          (click)="exportErrors()"
+          [disabled]="!result || analyzing"
+        >
+          <mat-icon>download</mat-icon>
+          Exportar errores
+        </button>
+        <button mat-flat-button color="accent" type="button" class="header-upload-button" (click)="headerFileInput.click()" [disabled]="analyzing">
+          <mat-icon>upload_file</mat-icon>
+          Nuevo Excel
+        </button>
+      </div>
+    </header>
+
+    <section class="module-stage" [ngSwitch]="activeView">
+      <section *ngSwitchCase="'upload'" class="upload-studio">
+        <article class="intake-panel">
+          <div class="intake-copy">
+            <span>Entrada de trabajo</span>
+            <h2>Subir archivo de formulas</h2>
+          </div>
+
+          <app-upload-panel
+            [selectedFile]="selectedFile"
+            [progress]="progress"
+            [analyzing]="analyzing"
+            [message]="message"
+            (fileSelected)="onFileSelected($event)"
+            (fileRemoved)="onFileRemoved()"
+            (analyzeRequested)="analyze()"
+          ></app-upload-panel>
+        </article>
+
+        <article *ngIf="result" class="resume-panel">
+          <span>Informe disponible</span>
+          <strong>{{ result.fileName }}</strong>
+          <button mat-stroked-button type="button" (click)="selectView('findings')">
+            <mat-icon>arrow_forward</mat-icon>
+            Abrir hallazgos
+          </button>
+        </article>
+      </section>
+
+      <section *ngSwitchCase="'translator'" class="tool-workspace">
+        <app-formula-translator *ngIf="result" [issues]="result.issues"></app-formula-translator>
+      </section>
+
+      <section *ngSwitchCase="'history'" class="history-workspace">
+        <article class="history-panel">
+          <header class="history-header">
+            <div>
+              <span>Analisis guardados</span>
+              <h2>Historial de analisis</h2>
+              <p>Estos son los Excel auditados que quedaron guardados en MongoDB.</p>
+            </div>
+            <button mat-stroked-button type="button" (click)="loadHistory()" [disabled]="historyLoading">
+              <mat-icon>refresh</mat-icon>
+              Actualizar
+            </button>
+          </header>
+
+          <div *ngIf="historyLoading" class="history-loading">
+            <mat-progress-spinner mode="indeterminate" diameter="32"></mat-progress-spinner>
+            <span>Cargando historial...</span>
+          </div>
+
+          <div *ngIf="!historyLoading && historyItems.length === 0" class="history-empty">
+            <mat-icon>history</mat-icon>
+            <strong>No hay analisis guardados</strong>
+            <span>Cuando analices un Excel, aparecera en este historial.</span>
+          </div>
+
+          <div *ngIf="!historyLoading && historyItems.length > 0" class="history-list">
+            <article class="history-card" *ngFor="let item of historyItems">
+              <div class="history-file">
+                <span class="history-file-icon">
+                  <mat-icon>description</mat-icon>
+                </span>
+                <div>
+                  <strong>{{ item.fileName }}</strong>
+                  <span>{{ formatHistoryDate(item.createdAt) }}</span>
+                </div>
+              </div>
+
+              <div class="history-metrics">
+                <span>
+                  <strong>{{ item.summary.totalIssues }}</strong>
+                  Hallazgos
+                </span>
+                <span>
+                  <strong>{{ item.summary.formulasAnalyzed }}</strong>
+                  Formulas
+                </span>
+                <span>
+                  <strong>{{ item.summary.conceptsAnalyzed }}</strong>
+                  Conceptos
+                </span>
+              </div>
+
+              <div class="history-actions">
+                <button mat-flat-button type="button" (click)="openHistoryItem(item)" [disabled]="analyzing">
+                  <mat-icon>open_in_new</mat-icon>
+                  Abrir
+                </button>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="history-delete-button"
+                  (click)="deleteHistoryItem(item)"
+                  [disabled]="deletingHistoryId === item.id"
+                >
+                  <mat-icon>delete</mat-icon>
+                  Eliminar
+                </button>
+              </div>
+            </article>
+          </div>
+        </article>
+      </section>
+
+      <section *ngSwitchCase="'findings'" class="report-workspace">
+        <app-issues-table *ngIf="result" [issues]="result.issues" [validationId]="result.id"></app-issues-table>
+      </section>
+    </section>
+  </section>
+
+  <div *ngIf="analyzing" class="screen-analysis-overlay" aria-live="polite" aria-busy="true">
+    <section class="screen-analysis-card">
+      <div class="excel-analysis-loader" aria-hidden="true">
+        <span class="loader-ring"></span>
+        <span class="loader-dot dot-one"></span>
+        <span class="loader-dot dot-two"></span>
+        <span class="loader-dot dot-three"></span>
+
+        <div class="loader-file">
+          <span class="file-fold"></span>
+          <span class="file-title"></span>
+          <span class="file-row row-one"></span>
+          <span class="file-row row-two"></span>
+          <span class="file-row row-three"></span>
+        </div>
+
+        <div class="loader-radar">
+          <span class="radar-ring ring-one"></span>
+          <span class="radar-ring ring-two"></span>
+          <span class="radar-sweep"></span>
+          <span class="radar-center"></span>
+          <span class="radar-handle"></span>
+        </div>
+      </div>
+
+      <span class="screen-analysis-eyebrow">Auditoria en curso</span>
+      <strong>Analizando Excel</strong>
+      <p>Estamos leyendo formulas, referencias y dependencias para armar el informe completo.</p>
+    </section>
+  </div>
+</main>

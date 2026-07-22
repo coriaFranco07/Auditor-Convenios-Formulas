@@ -1,0 +1,111 @@
+<section class="translator-panel">
+  <header class="module-header">
+    <span class="panel-icon">
+      <mat-icon>translate</mat-icon>
+    </span>
+    <div class="module-copy">
+      <span>Modulo funcional</span>
+      <h2>Traductor de formulas</h2>
+      <p>Lectura clara de formulas, textos y referencias para revisar el calculo sin lenguaje tecnico.</p>
+    </div>
+    <span class="module-count" *ngIf="formulaOptions.length">
+      {{ formulaOptions.length }} items
+    </span>
+  </header>
+
+  <ng-container *ngIf="selected as option; else noFormulas">
+    <div class="translator-layout">
+      <aside class="formula-sidebar">
+        <div class="sidebar-title">
+          <span>Elementos auditados</span>
+          <strong>Selecciona uno para revisar</strong>
+        </div>
+
+        <div class="formula-list">
+          <button
+            *ngFor="let item of formulaOptions; let index = index"
+            type="button"
+            [class.active]="index === selectedIndex"
+            (click)="select(index)"
+          >
+            <span class="item-index">{{ index + 1 }}</span>
+            <span class="item-copy">
+              <strong>{{ conciseLabel(item) }}</strong>
+              <small>{{ locationText(item.issue) }}</small>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <article class="translation-card">
+        <header class="translation-heading">
+          <span class="card-icon">
+            <mat-icon>local_offer</mat-icon>
+          </span>
+          <div>
+            <span>{{ formulaTypeLabel(option.formula) }}</span>
+            <h3>{{ conciseLabel(option) }}</h3>
+            <p>{{ locationText(option.issue) }}</p>
+          </div>
+        </header>
+
+        <div class="translation-grid">
+          <section class="formula-readable insight-card">
+            <span class="card-icon">
+              <mat-icon>chat</mat-icon>
+            </span>
+            <div>
+              <span>Lectura para revisar</span>
+              <p>{{ readableFormula(option.formula, option.issue) }}</p>
+            </div>
+          </section>
+
+          <section class="formula-original insight-card">
+            <span class="card-icon">
+              <mat-icon>description</mat-icon>
+            </span>
+            <div>
+              <span>Dato original del Excel</span>
+              <code>{{ option.formula }}</code>
+            </div>
+          </section>
+        </div>
+
+        <section class="reference-list" *ngIf="referencesFor(option).length">
+          <div class="section-title">
+            <mat-icon>account_tree</mat-icon>
+            <div>
+              <span>Referencias detectadas</span>
+              <strong>Conceptos, auxiliares o variables usadas por este item</strong>
+            </div>
+          </div>
+
+          <div class="reference-grid">
+            <article *ngFor="let reference of referencesFor(option)">
+              <code>{{ reference.raw }}</code>
+              <p>{{ reference.meaning }}</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="formula-warning" *ngIf="option.issue.message">
+          <span class="card-icon warning-icon">
+            <mat-icon>report_problem</mat-icon>
+          </span>
+          <div>
+            <span>Hallazgo asociado</span>
+            <p>{{ option.issue.message }}</p>
+          </div>
+        </section>
+      </article>
+    </div>
+  </ng-container>
+
+  <ng-template #noFormulas>
+    <div class="empty-action">
+      <mat-icon>functions</mat-icon>
+      <strong>No hay formulas para traducir</strong>
+      <p>Cuando un hallazgo incluya una formula, aca se mostrara su lectura humana.</p>
+    </div>
+  </ng-template>
+</section>

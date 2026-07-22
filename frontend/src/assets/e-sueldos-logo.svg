@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 54" role="img" aria-labelledby="title">
+  <title id="title">Sueldos</title>
+  <g fill="none" fill-rule="evenodd">
+    <g transform="translate(0 5)" fill="#ffffff">
+      <path d="M20.7 38.4C9.4 38.4.3 30 .3 19.7.3 9.8 8.7 1.6 19.6 1.2 24 0 28.9 2.9 32.5 7.2c1.8-.5 3.7-.8 5.7-.8 11 0 19.9 8.2 19.9 18.3C58.1 34.8 49.2 43 38.2 43H20.9c-8.6 0-15.6-6.5-15.6-14.5 0-7.8 6.7-14.2 15.1-14.5 1.2 0 2.2.9 2.2 2.1 0 1.1-.9 2.1-2.1 2.1-6 .2-10.9 4.8-10.9 10.3 0 5.7 5.1 10.3 11.3 10.3h17.3c8.5 0 15.5-6.4 15.5-14.2 0-7.8-7-14.2-15.5-14.2-2.2 0-4.4.4-6.4 1.3-1.1.5-2.4 0-2.9-1.1-2.5-5.3-7.9-8.9-14.2-8.9-7.1 0-13.2 4.8-15.1 11.2-.3 1-1.2 1.7-2.2 1.7-7.6.1-13.8 5.6-13.8 12.4 0 7 6.4 12.7 14.3 12.7 1.2 0 2.2.9 2.2 2.1s-.9 2.1-2.1 2.1Z" transform="translate(15 0)"/>
+      <path d="M23 19h6v14h-6zM32 14h6v19h-6zM41 23h6v10h-6z" transform="translate(15 0)" opacity=".88"/>
+      <path d="M31 15c4.7-4.4 12.2-4.4 16.9 0" transform="translate(15 0)" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round"/>
+    </g>
+    <text x="75" y="35" fill="#ffffff" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">Sueldos</text>
+  </g>
+</svg>

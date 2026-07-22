@@ -1,0 +1,66 @@
+@use '@angular/material' as mat;
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@include mat.core();
+
+$app-font: Inter, 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+$app-mono-font: 'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Courier New', monospace;
+$primary: mat.define-palette(mat.$blue-palette, 600, 400, 900);
+$accent: mat.define-palette(mat.$blue-palette, 600, 300, 900);
+$warn: mat.define-palette(mat.$red-palette, 700);
+$theme: mat.define-light-theme((
+  color: (
+    primary: $primary,
+    accent: $accent,
+    warn: $warn
+  ),
+  typography: mat.define-typography-config($font-family: $app-font),
+  density: -1
+));
+
+@include mat.all-component-themes($theme);
+
+html,
+body {
+  height: 100%;
+}
+
+:root {
+  --app-font: #{$app-font};
+  --app-mono-font: #{$app-mono-font};
+}
+
+body {
+  background: #eef2f6;
+  color: #16202a;
+  font-family: var(--app-font);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  margin: 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mat-mdc-table {
+  background: #ffffff;
+  font-family: var(--app-font);
+}
+
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-outlined-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-form-field,
+.mat-mdc-select,
+.mat-mdc-option,
+.mat-mdc-paginator {
+  font-family: var(--app-font);
+}
+
+.density-table .mat-mdc-cell,
+.density-table .mat-mdc-header-cell {
+  padding: 8px 12px;
+}

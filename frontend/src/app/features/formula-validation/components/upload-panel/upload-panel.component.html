@@ -1,0 +1,64 @@
+<section class="upload-card" [class.upload-card-analyzing]="analyzing">
+  <div
+    class="drop-zone"
+    [class.drop-zone-active]="dragging"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave()"
+    (drop)="onDrop($event)"
+  >
+    <mat-icon>cloud_upload</mat-icon>
+    <strong>Solta el archivo aqui</strong>
+    <p>o hace clic para elegir uno desde tu computadora</p>
+    <input #fileInput type="file" accept=".xlsx" class="hidden" (change)="handleInput($event)" />
+    <button mat-stroked-button color="primary" type="button" (click)="fileInput.click()" [disabled]="analyzing">
+      <mat-icon>note_add</mat-icon>
+      Seleccionar Excel
+    </button>
+    <small>XLSX - Hasta 20 MB</small>
+  </div>
+
+  <div *ngIf="selectedFile" class="selected-file">
+    <mat-icon>description</mat-icon>
+    <div class="min-w-0">
+      <p>{{ selectedFile.name }}</p>
+      <span>{{ fileSize }}</span>
+    </div>
+    <button mat-icon-button type="button" matTooltip="Quitar archivo" (click)="fileRemoved.emit()" [disabled]="analyzing">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div *ngIf="selectedFile || analyzing" class="upload-progress">
+    <div>
+      <span>Progreso de analisis</span>
+      <strong>{{ progress }}%</strong>
+    </div>
+    <mat-progress-bar mode="determinate" [value]="progress"></mat-progress-bar>
+  </div>
+
+  <p *ngIf="message" class="error-message">
+    <mat-icon>error</mat-icon>
+    {{ message }}
+  </p>
+
+  <div class="upload-actions">
+    <div class="upload-footer">
+      <span class="ready-dot"></span>
+      <span>{{ selectedFile ? selectedFile.name : 'Listo para iniciar' }}</span>
+    </div>
+
+    <button
+      mat-flat-button
+      color="accent"
+      type="button"
+      class="analyze-button"
+      (click)="analyzeRequested.emit()"
+      [disabled]="!selectedFile || analyzing"
+    >
+      <mat-icon *ngIf="!analyzing">play_arrow</mat-icon>
+      <mat-spinner *ngIf="analyzing" diameter="18"></mat-spinner>
+      Analizar archivo
+      <mat-icon *ngIf="!analyzing">arrow_forward</mat-icon>
+    </button>
+  </div>
+</section>
