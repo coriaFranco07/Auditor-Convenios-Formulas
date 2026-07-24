@@ -9,6 +9,7 @@ import { CircularDependencyValidator } from '../validators/circular-dependency.v
 import { DuplicateValidator } from '../validators/duplicate.validator';
 import { FormulaSyntaxValidator } from '../validators/formula-syntax.validator';
 import { FormulaSemanticValidator } from '../validators/formula-semantic.validator';
+import { FunctionalAuditValidator } from '../validators/functional-audit.validator';
 import { ReferenceValidator } from '../validators/reference.validator';
 import { TypeValidator } from '../validators/type.validator';
 import { ValidationRule } from '../validators/validation-rule';
@@ -34,6 +35,7 @@ export class ValidationService {
     new FormulaSemanticValidator(),
     new ReferenceValidator(),
     new TypeValidator(),
+    new FunctionalAuditValidator(),
     new CircularDependencyValidator(),
     new AuxiliaryValidator(),
     new AccumulatorValidator(),

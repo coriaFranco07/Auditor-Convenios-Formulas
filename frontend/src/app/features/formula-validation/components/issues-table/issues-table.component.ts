@@ -39,6 +39,12 @@ export class IssuesTableComponent implements OnChanges {
       icon: 'functions'
     },
     {
+      id: 'functional',
+      title: 'Auditoria funcional del PDF',
+      description: 'Controles de unidad, totaliza, secuencia, pre/post formula, auxiliares y acumuladores segun el manual.',
+      icon: 'rule_folder'
+    },
+    {
       id: 'references',
       title: 'Referencias no encontradas',
       description: 'Conceptos, auxiliares o variables que una formula usa pero no existen en las tablas.',
@@ -164,6 +170,24 @@ export class IssuesTableComponent implements OnChanges {
       category === 'REFERENCES'
     ) {
       return 'references';
+    }
+
+    if (
+      category === 'FUNCTIONAL_AUDIT' ||
+      code === 'FORMULA_TEXT_IN_CALCULATION_COLUMN' ||
+      code === 'CALCULATION_ORDER_REVIEW' ||
+      code === 'UNIT_USES_AMOUNT_REFERENCE' ||
+      code === 'CONDITION_USES_RESULT_REFERENCE' ||
+      code === 'TOTALIZES_VALUE_INVALID' ||
+      code === 'PRE_POST_WITHOUT_MAIN_FORMULA' ||
+      code === 'AUXILIARY_VALUE_MISSING' ||
+      code === 'AUXILIARY_VALUE_HAS_FORMULA' ||
+      code === 'AUXILIARY_ACCUMULATOR_HAS_FORMULA' ||
+      code === 'AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS' ||
+      code === 'ACCUMULATOR_CONCEPT_NAME_MISMATCH' ||
+      code === 'ACCUMULATOR_CONTRADICTORY_OPERATION'
+    ) {
+      return 'functional';
     }
 
     if (

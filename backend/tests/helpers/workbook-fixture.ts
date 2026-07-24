@@ -32,6 +32,7 @@ export interface FixtureOptions {
   incompleteConceptFormula?: boolean;
   scopeMismatch?: boolean;
   wordOperatorFormula?: boolean;
+  pdfFunctionalIssues?: boolean;
 }
 
 export const createWorkbookFixture = async (options: FixtureOptions = {}): Promise<Buffer> => {
@@ -60,7 +61,7 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     null,
     null,
     12,
-    null,
+    options.pdfFunctionalIssues ? 'Retencion de Alimentos' : null,
     null,
     1,
   ]);
@@ -72,6 +73,11 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
   }
   if (options.selfReference) {
     concepts.addRow([3, 'AUTOREFERENCIA', 'Automática', 'Mensual', null, 'R[3]', null, null, null, null, null, null, 12, null, null, 3]);
+  }
+
+  if (options.pdfFunctionalIssues) {
+    concepts.addRow([2, 'CONCEPTO ORDENADO ANTES', 'Automatica', 'Mensual', null, 'R[3]', null, 'R[1]', null, null, null, null, 'Si', null, null, 2]);
+    concepts.addRow([3, 'CONCEPTO POSTERIOR', 'Automatica', 'Mensual', null, 'L[10]', null, null, null, null, null, null, 12, null, null, 3]);
   }
 
   if (!options.omitVariablesSheet) {
@@ -90,10 +96,22 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     auxiliaries.addRow([20, 'AUX INVALIDO', null, 'L[10]', null, null, 'F']);
   }
 
+  if (options.pdfFunctionalIssues) {
+    auxiliaries.addRow([30, 'VALOR FIJO SIN VALOR', null, null, null, null, 'V']);
+    auxiliaries.addRow([31, 'FORMULA CON COMPONENTES', 'L[10]', null, null, null, 'F']);
+    auxiliaries.addRow([32, 'ACUMULADOR CON FORMULA', 'L[10]', null, null, null, 'A']);
+  }
+
   const accumulators = workbook.addWorksheet('Acumuladores (4)');
   accumulators.addRow([null, 'Acumulador', 'Codigo De Concepto', 'Concepto', 'Valor']);
   if (options.incompleteAccumulator) {
     accumulators.addRow([1, 'TOTAL', null, null, 'Suma']);
+  }
+  if (options.pdfFunctionalIssues) {
+    accumulators.addRow([31, 'FORMULA CON COMPONENTES', 1, 'SUELDO BASICO', 'Suma']);
+    accumulators.addRow([40, 'TOTAL PRUEBA', 1, 'OTRO NOMBRE', 'Suma']);
+    accumulators.addRow([41, 'TOTAL CANCELADO', 1, 'SUELDO BASICO', 'Suma']);
+    accumulators.addRow([41, 'TOTAL CANCELADO', 1, 'SUELDO BASICO', 'Resta']);
   }
 
   const conventions = workbook.addWorksheet('Convenios (5)');

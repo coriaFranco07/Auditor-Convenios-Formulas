@@ -171,6 +171,9 @@ const entityTypeLabel = (entityType?: string): string => {
 };
 
 const controlTypeLabel = (issue: ValidationIssue): string => {
+  if (issue.category === 'FUNCTIONAL_AUDIT') {
+    return 'Auditoria funcional del PDF';
+  }
   if (issue.code === 'DUPLICATE_IDENTICAL' || issue.code === 'DUPLICATE_CONFLICT' || issue.category === 'DUPLICATES') {
     return 'Duplicados y conflictos';
   }

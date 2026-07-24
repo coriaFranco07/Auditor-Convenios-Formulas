@@ -152,6 +152,30 @@ describe('Validation API', () => {
     expect(codes).toContain('FORMULA_SCOPE_MISMATCH');
   });
 
+  it('detecta controles funcionales pedidos por el PDF', async () => {
+    const buffer = await createWorkbookFixture({
+      pdfFunctionalIssues: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'auditoria-pdf.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const codes = response.body.issues.map((issue: { code: string }) => issue.code);
+    expect(codes).toContain('FORMULA_TEXT_IN_CALCULATION_COLUMN');
+    expect(codes).toContain('CALCULATION_ORDER_REVIEW');
+    expect(codes).toContain('UNIT_USES_AMOUNT_REFERENCE');
+    expect(codes).toContain('TOTALIZES_VALUE_INVALID');
+    expect(codes).toContain('AUXILIARY_VALUE_MISSING');
+    expect(codes).toContain('AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS');
+    expect(codes).toContain('AUXILIARY_ACCUMULATOR_HAS_FORMULA');
+    expect(codes).toContain('ACCUMULATOR_CONCEPT_NAME_MISMATCH');
+    expect(codes).toContain('ACCUMULATOR_CONTRADICTORY_OPERATION');
+  });
+
   it('analiza el archivo real de referencia y permite descargas', async () => {
     const reference = path.resolve(__dirname, '../../referencias/Formulas.Comercio.xlsx');
     const response = await request(app)

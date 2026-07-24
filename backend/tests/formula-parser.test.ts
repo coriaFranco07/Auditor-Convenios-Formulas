@@ -55,6 +55,16 @@ describe('FormulaParser', () => {
     expect(parser.parse('NO(L[10] > 0)').inferredType).toBe('BOOLEAN');
   });
 
+  it('acepta operadores escritos cuando hay referencias tecnicas', () => {
+    const result = parser.parse('( L[10] mas N[1] ) multiplicado por 0.2');
+    expect(result.syntaxErrors).toHaveLength(0);
+    expect(result.inferredType).toBe('NUMBER');
+    expect(result.references).toEqual([
+      expect.objectContaining({ type: 'L', id: 10 }),
+      expect.objectContaining({ type: 'N', id: 1 }),
+    ]);
+  });
+
   it('detecta tipos incompatibles dentro de funciones', () => {
     const result = parser.parse('SI(L[10]; 1; 0)');
     expect(result.syntaxErrors).toHaveLength(0);

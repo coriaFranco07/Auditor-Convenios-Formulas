@@ -1,4 +1,5 @@
 import { createIssue } from '../domain/issue-factory';
+import { collectEffectiveReferences } from '../domain/formula-analysis';
 import { DependencyNodeDetail, IssueCodes, ValidationIssue } from '../types/validation.types';
 import { AccumulatorRecord, BaseRecord, FormulaCell, WorkbookContext } from '../types/workbook.types';
 import { ValidationRule } from './validation-rule';
@@ -72,7 +73,7 @@ export class CircularDependencyValidator implements ValidationRule {
       if (!graph.has(owner)) {
         graph.set(owner, new Set());
       }
-      formulaCell.parseResult.references.forEach((reference) => {
+      collectEffectiveReferences(formulaCell.parseResult.ast).forEach((reference) => {
         if (reference.id === undefined || (reference.type !== 'A' && reference.type !== 'R')) {
           return;
         }

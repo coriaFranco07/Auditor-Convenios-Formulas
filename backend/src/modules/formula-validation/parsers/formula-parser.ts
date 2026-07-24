@@ -25,7 +25,7 @@ export class FormulaParser {
 
   parse(input: string): FormulaParseResult {
     const tokenizer = new FormulaTokenizer();
-    const tokenizeResult = tokenizer.tokenize(input);
+    const tokenizeResult = tokenizer.tokenize(normalizeWordOperators(input));
     this.tokens = tokenizeResult.tokens;
     this.current = 0;
     this.syntaxErrors = [...tokenizeResult.errors];
@@ -485,4 +485,18 @@ export const containsExplicitDivisionByZero = (expression: Expression): boolean 
     return expression.args.some(containsExplicitDivisionByZero);
   }
   return false;
+};
+
+export const normalizeWordOperators = (input: string): string => {
+  if (!/\b[NIARUL]\s*\[/i.test(input)) {
+    return input;
+  }
+
+  return input
+    .replace(/\bmultiplicado\s+por\b/gi, ' * ')
+    .replace(/\bdividido\s+(por|en)\b/gi, ' / ')
+    .replace(/\bmas\b/gi, ' + ')
+    .replace(/\bm[aá]s\b/gi, ' + ')
+    .replace(/\bmenos\b/gi, ' - ')
+    .replace(/\bpor\b/gi, ' * ');
 };
