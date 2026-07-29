@@ -1,5 +1,6 @@
 import { createIssue } from '../domain/issue-factory';
 import { buildSymbolTables } from '../domain/symbol-table';
+import { uniqueReferences } from '../domain/formula-analysis';
 import { IssueCodes, ValidationIssue } from '../types/validation.types';
 import { FormulaCell, WorkbookContext } from '../types/workbook.types';
 import { ValidationRule } from './validation-rule';
@@ -10,8 +11,11 @@ export class ReferenceValidator implements ValidationRule {
     const issues: ValidationIssue[] = [];
 
     context.formulaCells.forEach((formulaCell) => {
-      formulaCell.parseResult.references.forEach((reference) => {
+      uniqueReferences(formulaCell.parseResult.references).forEach((reference) => {
         if (reference.id === undefined) {
+          return;
+        }
+        if (reference.type === 'N' || reference.type === 'I') {
           return;
         }
         const exists = this.referenceExists(reference.type, reference.id, tables);
@@ -84,4 +88,3 @@ export class ReferenceValidator implements ValidationRule {
     });
   }
 }
-

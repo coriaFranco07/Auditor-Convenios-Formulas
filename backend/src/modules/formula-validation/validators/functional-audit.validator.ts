@@ -1,6 +1,6 @@
 import { normalizeText } from '../../../config/schema';
 import { createIssue } from '../domain/issue-factory';
-import { collectEffectiveReferences, uniqueReferences } from '../domain/formula-analysis';
+import { uniqueReferences } from '../domain/formula-analysis';
 import { isBlank } from '../domain/normalization';
 import { FormulaReference } from '../types/formula.types';
 import { IssueCodes, ValidationIssue } from '../types/validation.types';
@@ -30,7 +30,6 @@ export class FunctionalAuditValidator implements ValidationRule {
   validate(context: WorkbookContext): ValidationIssue[] {
     return [
       ...this.validateFormulaRoleReferences(context),
-      ...this.validateFormulaFlow(context),
       ...this.validateConceptPdfFields(context),
       ...this.validateAuxiliaryPdfRules(context),
       ...this.validateAccumulatorPdfRules(context),
@@ -66,91 +65,7 @@ export class FunctionalAuditValidator implements ValidationRule {
         }
       }
 
-      if (formulaCell.role === 'CONDITION') {
-        const resultReferences = references.filter((reference) => reference.type === 'R' || reference.type === 'U' || reference.type === 'I');
-        if (resultReferences.length > 0) {
-          issues.push(
-            this.formulaIssue({
-              formulaCell,
-              code: IssueCodes.CONDITION_USES_RESULT_REFERENCE,
-              title: 'Condicion depende de resultados calculados',
-              message: `La condicion usa ${this.referenceList(resultReferences)}, que dependen de datos liquidados o novedades de importe.`,
-              explanation:
-                'El PDF describe las condiciones como reglas logicas previas al calculo. Si dependen de importes o unidades ya calculadas, pueden quedar atadas al orden de liquidacion.',
-              recommendation:
-                'Confirmar que esos resultados ya existan cuando se evalua la condicion. Si no, mover la logica a un auxiliar o usar variables/novedades base.',
-              severity: 'WARNING',
-              reference: resultReferences[0],
-            }),
-          );
-        }
-      }
     });
-
-    return issues;
-  }
-
-  private validateFormulaFlow(context: WorkbookContext): ValidationIssue[] {
-    const conceptsById = this.firstById(context.concepts);
-    const issues: ValidationIssue[] = [];
-    const emitted = new Set<string>();
-
-    context.formulaCells
-      .filter((formulaCell) => formulaCell.entityType === 'CONCEPT' && formulaCell.entityId !== undefined)
-      .forEach((formulaCell) => {
-        if (formulaCell.parseResult.syntaxErrors.length > 0) {
-          return;
-        }
-        const owner = conceptsById.get(Number(formulaCell.entityId));
-        if (!owner?.sequence) {
-          return;
-        }
-
-        uniqueReferences(collectEffectiveReferences(formulaCell.parseResult.ast))
-          .filter((reference) => reference.id !== undefined && (reference.type === 'R' || reference.type === 'U'))
-          .forEach((reference) => {
-            if (reference.id === owner.id) {
-              return;
-            }
-            const dependency = conceptsById.get(reference.id!);
-            if (!dependency?.sequence || dependency.sequence < owner.sequence!) {
-              return;
-            }
-
-            const key = `${owner.id}|${formulaCell.cell}|${reference.type}[${reference.id}]`;
-            if (emitted.has(key)) {
-              return;
-            }
-            emitted.add(key);
-
-            issues.push(
-              createIssue({
-                code: IssueCodes.CALCULATION_ORDER_REVIEW,
-                severity: 'WARNING',
-                category: 'FUNCTIONAL_AUDIT',
-                title: 'Secuencia de calculo a revisar',
-                message: `La formula usa ${reference.type}[${reference.id}] - ${dependency.name ?? 'sin nombre'}, que tiene secuencia ${dependency.sequence}; el concepto actual tiene secuencia ${owner.sequence}.`,
-                explanation:
-                  'El PDF indica que la secuencia define el orden de calculo. Si una formula usa un concepto que se calcula despues, el resultado puede depender de un dato que todavia no existe.',
-                recommendation:
-                  'Confirmar si el motor de liquidacion resuelve esa dependencia. Si no, adelantar el concepto usado, mover la base a un auxiliar independiente o ajustar la formula.',
-                location: formulaCell,
-                entityType: 'CONCEPT',
-                entityId: owner.id,
-                entityName: owner.name,
-                formula: formulaCell.formula,
-                invalidFragment: `${reference.type}[${reference.id}]`,
-                referenceType: reference.type,
-                referenceId: reference.id,
-                relatedLocations: [
-                  this.recordLocation(owner),
-                  this.recordLocation(dependency),
-                ],
-                blocksImport: false,
-              }),
-            );
-          });
-      });
 
     return issues;
   }
@@ -208,9 +123,6 @@ export class FunctionalAuditValidator implements ValidationRule {
 
   private validateAuxiliaryPdfRules(context: WorkbookContext): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const accumulatorIds = new Set(
-      context.accumulators.map((accumulator) => accumulator.id).filter((id): id is number => id !== undefined),
-    );
 
     context.auxiliaries.forEach((auxiliary) => {
       const auxiliaryClass = this.normalizedClass(auxiliary);
@@ -249,7 +161,12 @@ export class FunctionalAuditValidator implements ValidationRule {
       }
 
       if (auxiliaryClass === 'A') {
-        if (!isBlank(auxiliary.trueFormula) || !isBlank(auxiliary.falseFormula) || !isBlank(auxiliary.condition) || !isBlank(auxiliary.value)) {
+        if (
+          !isBlank(auxiliary.trueFormula) ||
+          !isBlank(auxiliary.falseFormula) ||
+          !isBlank(auxiliary.condition) ||
+          this.hasMeaningfulAccumulatorValue(auxiliary.value)
+        ) {
           issues.push(
             this.auxiliaryIssue(
               auxiliary,
@@ -263,20 +180,6 @@ export class FunctionalAuditValidator implements ValidationRule {
           );
         }
       }
-
-      if (auxiliaryClass === 'F' && auxiliary.id !== undefined && accumulatorIds.has(auxiliary.id)) {
-        issues.push(
-          this.auxiliaryIssue(
-            auxiliary,
-            IssueCodes.AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS,
-            'Auxiliar formula con componentes de acumulador',
-            `El auxiliar A[${auxiliary.id}] esta marcado como formula, pero tambien tiene componentes en Acumuladores.`,
-            'Para el PDF, clase F y clase A tienen origen distinto. Si el mismo codigo aparece como formula y como acumulador, la lectura funcional queda ambigua.',
-            'Confirmar la clase correcta del auxiliar o separar los codigos.',
-            'WARNING',
-          ),
-        );
-      }
     });
 
     return issues;
@@ -284,7 +187,7 @@ export class FunctionalAuditValidator implements ValidationRule {
 
   private validateAccumulatorPdfRules(context: WorkbookContext): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const conceptsById = this.firstById(context.concepts);
+    const conceptsById = this.groupById(context.concepts);
     const accumulatorConceptOperations = new Map<string, AccumulatorRecord[]>();
     const nameMismatchEmitted = new Set<string>();
 
@@ -300,9 +203,14 @@ export class FunctionalAuditValidator implements ValidationRule {
         return;
       }
 
-      const concept = conceptsById.get(accumulator.conceptId);
+      const concepts = conceptsById.get(accumulator.conceptId) ?? [];
       const key = `${accumulator.id}|${accumulator.conceptId}`;
-      if (!concept?.name || nameMismatchEmitted.has(key) || this.namesMatch(accumulator.conceptName, concept.name)) {
+      const candidateNames = concepts.map((concept) => concept.name).filter((name): name is string => !isBlank(name));
+      if (
+        candidateNames.length === 0 ||
+        nameMismatchEmitted.has(key) ||
+        candidateNames.some((conceptName) => this.namesMatch(accumulator.conceptName, conceptName))
+      ) {
         return;
       }
       nameMismatchEmitted.add(key);
@@ -313,7 +221,7 @@ export class FunctionalAuditValidator implements ValidationRule {
           severity: 'WARNING',
           category: 'FUNCTIONAL_AUDIT',
           title: 'Nombre de concepto distinto en acumulador',
-          message: `El acumulador ${accumulator.id ?? 'sin codigo'} usa el concepto ${accumulator.conceptId}, pero el nombre cargado es "${accumulator.conceptName}" y en Conceptos figura "${concept.name}".`,
+          message: `El acumulador ${accumulator.id ?? 'sin codigo'} usa el concepto ${accumulator.conceptId}, pero el nombre cargado es "${accumulator.conceptName}" y no coincide con los nombres disponibles en Conceptos: ${this.conceptCandidatesLabel(concepts)}.`,
           explanation:
             'El PDF usa la hoja Acumuladores para explicar que conceptos componen un auxiliar. Si el nombre no coincide, la contadora puede revisar el componente equivocado.',
           recommendation:
@@ -326,7 +234,7 @@ export class FunctionalAuditValidator implements ValidationRule {
           referenceId: accumulator.conceptId,
           relatedLocations: [
             this.recordLocation(accumulator),
-            this.recordLocation(concept),
+            ...concepts.map((concept) => this.recordLocation(concept)),
           ],
           blocksImport: false,
         }),
@@ -421,14 +329,23 @@ export class FunctionalAuditValidator implements ValidationRule {
     });
   }
 
-  private firstById<T extends { id?: number }>(records: T[]): Map<number, T> {
-    const map = new Map<number, T>();
+  private groupById<T extends { id?: number }>(records: T[]): Map<number, T[]> {
+    const map = new Map<number, T[]>();
     records.forEach((record) => {
-      if (record.id !== undefined && !map.has(record.id)) {
-        map.set(record.id, record);
+      if (record.id === undefined) {
+        return;
       }
+      const current = map.get(record.id) ?? [];
+      current.push(record);
+      map.set(record.id, current);
     });
     return map;
+  }
+
+  private conceptCandidatesLabel(concepts: ConceptRecord[]): string {
+    return concepts
+      .map((concept) => `fila ${concept.row} "${concept.name ?? 'sin nombre'}"`)
+      .join('; ');
   }
 
   private referenceList(references: FormulaReference[]): string {
@@ -467,6 +384,17 @@ export class FunctionalAuditValidator implements ValidationRule {
 
   private normalizedClass(auxiliary: AuxiliaryRecord): string {
     return String(auxiliary.class ?? '').trim().toUpperCase();
+  }
+
+  private hasMeaningfulAccumulatorValue(value: unknown): boolean {
+    if (isBlank(value)) {
+      return false;
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    const normalized = String(value).trim().replace(',', '.');
+    return normalized !== '0' && normalized !== '0.0' && normalized !== '0.00';
   }
 
   private namesMatch(left: unknown, right: unknown): boolean {

@@ -33,6 +33,10 @@ export interface FixtureOptions {
   scopeMismatch?: boolean;
   wordOperatorFormula?: boolean;
   pdfFunctionalIssues?: boolean;
+  repeatedConceptNameForAccumulator?: boolean;
+  externalNoveltyReferences?: boolean;
+  repeatedMissingReference?: boolean;
+  accumulatorAuxiliaryWithZeroValue?: boolean;
 }
 
 export const createWorkbookFixture = async (options: FixtureOptions = {}): Promise<Buffer> => {
@@ -80,6 +84,19 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     concepts.addRow([3, 'CONCEPTO POSTERIOR', 'Automatica', 'Mensual', null, 'L[10]', null, null, null, null, null, null, 12, null, null, 3]);
   }
 
+  if (options.repeatedConceptNameForAccumulator) {
+    concepts.addRow([445, 'ANTIGUEDAD S/ ACUERDO 2020', 'Automatica', 'Mensual', null, 'L[10]', null, null, null, null, null, null, 12, null, null, 67]);
+    concepts.addRow([445, 'ANTIGUEDAD s/ACUERDO NR 2', 'Automatica', 'Mensual', null, 'L[10]', null, null, null, null, null, null, 12, null, null, 68]);
+  }
+
+  if (options.externalNoveltyReferences) {
+    concepts.addRow([20, 'NOVEDADES EXTERNAS', 'Automatica', 'Mensual', null, 'N[999] + I[998]', null, null, null, null, null, null, 12, null, null, 20]);
+  }
+
+  if (options.repeatedMissingReference) {
+    concepts.addRow([21, 'REFERENCIA REPETIDA', 'Automatica', 'Mensual', null, 'U[999] + U[999]', null, null, null, null, null, null, 12, null, null, 21]);
+  }
+
   if (!options.omitVariablesSheet) {
     const variables = workbook.addWorksheet('Variables de Legajos (2)');
     variables.addRow(['e-Sueldos_datos_exportados_test']);
@@ -101,6 +118,9 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     auxiliaries.addRow([31, 'FORMULA CON COMPONENTES', 'L[10]', null, null, null, 'F']);
     auxiliaries.addRow([32, 'ACUMULADOR CON FORMULA', 'L[10]', null, null, null, 'A']);
   }
+  if (options.accumulatorAuxiliaryWithZeroValue) {
+    auxiliaries.addRow([60, 'ACUMULADOR CON CERO', null, null, null, 0, 'A']);
+  }
 
   const accumulators = workbook.addWorksheet('Acumuladores (4)');
   accumulators.addRow([null, 'Acumulador', 'Codigo De Concepto', 'Concepto', 'Valor']);
@@ -112,6 +132,9 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     accumulators.addRow([40, 'TOTAL PRUEBA', 1, 'OTRO NOMBRE', 'Suma']);
     accumulators.addRow([41, 'TOTAL CANCELADO', 1, 'SUELDO BASICO', 'Suma']);
     accumulators.addRow([41, 'TOTAL CANCELADO', 1, 'SUELDO BASICO', 'Resta']);
+  }
+  if (options.repeatedConceptNameForAccumulator) {
+    accumulators.addRow([10, 'TOTAL NO REMUNERATIVO', 445, 'ANTIGUEDAD s/ACUERDO NR 2', 'Suma']);
   }
 
   const conventions = workbook.addWorksheet('Convenios (5)');

@@ -60,30 +60,6 @@ export class AccumulatorValidator implements ValidationRule {
       }
     });
 
-    const accumulatorIds = new Set(context.accumulators.map((record) => record.id).filter((id): id is number => id !== undefined));
-    context.auxiliaries
-      .filter((auxiliary) => auxiliary.class === 'A' && auxiliary.id !== undefined)
-      .forEach((auxiliary) => {
-        if (!accumulatorIds.has(auxiliary.id!)) {
-          issues.push(
-            createIssue({
-              code: IssueCodes.SCHEMA_DRIFT,
-              severity: 'WARNING',
-              category: 'ACCUMULATORS',
-              title: 'Auxiliar acumulador sin componentes',
-              message: `El auxiliar A[${auxiliary.id}] declara clase A pero no tiene componentes en Acumuladores.`,
-              explanation: 'Puede tratarse de documentacion o datos desactualizados.',
-              recommendation: 'Confirmar la definicion del acumulador.',
-              location: auxiliary.sourceColumns.id,
-              entityType: 'AUXILIARY',
-              entityId: auxiliary.id,
-              entityName: auxiliary.name,
-              blocksImport: false,
-            }),
-          );
-        }
-      });
-
     return issues;
   }
 
@@ -104,4 +80,3 @@ export class AccumulatorValidator implements ValidationRule {
     });
   }
 }
-

@@ -63,6 +63,11 @@
               <strong>Posible reemplazo:</strong>
               <span>{{ issue.replacementSuggestions?.[0]?.token }} - {{ issue.replacementSuggestions?.[0]?.label }}</span>
             </div>
+            <div class="duplicate-inline" *ngIf="isDuplicateIssue(issue) && duplicateRowsLabel(issue)">
+              <mat-icon>format_list_numbered</mat-icon>
+              <strong>{{ duplicateCountLabel(issue) }}</strong>
+              <span>Filas: {{ duplicateRowsLabel(issue) }}</span>
+            </div>
           </div>
 
           <div class="action-cell">

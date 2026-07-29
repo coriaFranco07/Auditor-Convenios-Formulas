@@ -9,6 +9,9 @@ export class FormulaSyntaxValidator implements ValidationRule {
     const issues: ValidationIssue[] = [];
     context.formulaCells.forEach((formulaCell) => {
       if (formulaCell.parseResult.syntaxErrors.length > 0 && this.looksLikePlainText(formulaCell.formula)) {
+        if (this.isConceptPreOrPostRoutine(formulaCell)) {
+          return;
+        }
         issues.push(
           createIssue({
             code: IssueCodes.FORMULA_TEXT_IN_CALCULATION_COLUMN,
@@ -85,9 +88,13 @@ export class FormulaSyntaxValidator implements ValidationRule {
     if (/\b[NIARUL]\s*\[/i.test(normalized)) {
       return false;
     }
-    if (/[+\-*/<>=();\[\]]/.test(normalized)) {
+    if (/[+\-*/<>=();[\]]/.test(normalized)) {
       return false;
     }
     return true;
+  }
+
+  private isConceptPreOrPostRoutine(formulaCell: { entityType?: string; column?: string }): boolean {
+    return formulaCell.entityType === 'CONCEPT' && ['N', 'O'].includes(formulaCell.column ?? '');
   }
 }

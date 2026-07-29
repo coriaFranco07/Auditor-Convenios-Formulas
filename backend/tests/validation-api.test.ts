@@ -97,10 +97,9 @@ describe('Validation API', () => {
     expect(response.body.issues.some((issue: { code: string }) => issue.code === 'MISSING_REQUIRED_SHEET')).toBe(true);
   });
 
-  it('detecta referencias inexistentes, duplicados, tipos y ciclos', async () => {
+  it('detecta referencias inexistentes, tipos y ciclos', async () => {
     const buffer = await createWorkbookFixture({
       missingReference: true,
-      duplicateConflict: true,
       invalidCondition: true,
       selfReference: true,
       indirectCycle: true,
@@ -116,21 +115,30 @@ describe('Validation API', () => {
       .expect(201);
     const codes = response.body.issues.map((issue: { code: string }) => issue.code);
     expect(codes).toContain('MISSING_AUXILIARY_REFERENCE');
-    expect(codes).toContain('DUPLICATE_CONFLICT');
     expect(codes).toContain('INVALID_CONDITION_TYPE');
     expect(codes).toContain('SELF_REFERENCE');
     expect(codes).toContain('CIRCULAR_DEPENDENCY');
     expect(codes).toContain('INVALID_AUXILIARY_ROW');
     expect(codes).toContain('INVALID_ACCUMULATOR_ROW');
+  });
 
-    const duplicate = response.body.issues.find((issue: { code: string }) => issue.code === 'DUPLICATE_CONFLICT');
-    expect(duplicate.message).toBe('CONCEPT 1 aparece 2 veces.');
-    expect(duplicate.relatedLocations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ sheet: 'Conceptos y Formulas (1)', row: 3, cell: 'A3' }),
-        expect.objectContaining({ sheet: 'Conceptos y Formulas (1)', row: 4, cell: 'A4' }),
-      ]),
+  it('no trata el numero repetido de conceptos como duplicado', async () => {
+    const buffer = await createWorkbookFixture({
+      duplicateConflict: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'orden-repetido.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const conceptDuplicates = response.body.issues.filter(
+      (issue: { category?: string; entityType?: string }) =>
+        issue.category === 'DUPLICATES' && issue.entityType === 'CONCEPT',
     );
+    expect(conceptDuplicates).toEqual([]);
   });
 
   it('detecta problemas funcionales dentro de formulas', async () => {
@@ -165,15 +173,144 @@ describe('Validation API', () => {
       .expect(201);
 
     const codes = response.body.issues.map((issue: { code: string }) => issue.code);
-    expect(codes).toContain('FORMULA_TEXT_IN_CALCULATION_COLUMN');
-    expect(codes).toContain('CALCULATION_ORDER_REVIEW');
     expect(codes).toContain('UNIT_USES_AMOUNT_REFERENCE');
     expect(codes).toContain('TOTALIZES_VALUE_INVALID');
     expect(codes).toContain('AUXILIARY_VALUE_MISSING');
-    expect(codes).toContain('AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS');
     expect(codes).toContain('AUXILIARY_ACCUMULATOR_HAS_FORMULA');
     expect(codes).toContain('ACCUMULATOR_CONCEPT_NAME_MISMATCH');
     expect(codes).toContain('ACCUMULATOR_CONTRADICTORY_OPERATION');
+  });
+
+  it('no marca condiciones que usan resultados calculados como problema de auditoria', async () => {
+    const buffer = await createWorkbookFixture({
+      pdfFunctionalIssues: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'condicion-con-resultados.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const codes = response.body.issues.map((issue: { code: string }) => issue.code);
+    expect(codes).not.toContain('CONDITION_USES_RESULT_REFERENCE');
+    expect(codes).not.toContain('CALCULATION_ORDER_REVIEW');
+  });
+
+  it('no marca diferencia de nombre si el acumulador coincide con uno de los conceptos repetidos', async () => {
+    const buffer = await createWorkbookFixture({
+      repeatedConceptNameForAccumulator: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'acumulador-concepto-repetido.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const accumulatorNameMismatch = response.body.issues.filter(
+      (issue: { code?: string; referenceId?: number }) =>
+        issue.code === 'ACCUMULATOR_CONCEPT_NAME_MISMATCH' && issue.referenceId === 445,
+    );
+    expect(accumulatorNameMismatch).toEqual([]);
+  });
+
+  it('no marca N/I como referencias faltantes porque son novedades externas al Excel', async () => {
+    const buffer = await createWorkbookFixture({
+      externalNoveltyReferences: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'novedades-externas.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const missingNoveltyReferences = response.body.issues.filter(
+      (issue: { code?: string; referenceType?: string }) =>
+        issue.code === 'MISSING_CONCEPT_REFERENCE' && ['N', 'I'].includes(issue.referenceType ?? ''),
+    );
+    expect(missingNoveltyReferences).toEqual([]);
+  });
+
+  it('emite una sola vez la misma referencia faltante dentro de una celda', async () => {
+    const buffer = await createWorkbookFixture({
+      repeatedMissingReference: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'referencia-repetida.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const repeatedReferenceIssues = response.body.issues.filter(
+      (issue: { code?: string; cell?: string; invalidFragment?: string }) =>
+        issue.code === 'MISSING_CONCEPT_REFERENCE' &&
+        issue.cell === 'F4' &&
+        issue.invalidFragment === 'U[999]',
+    );
+    expect(repeatedReferenceIssues).toHaveLength(1);
+  });
+
+  it('no marca texto de Pre/Post Formula como formula invalida', async () => {
+    const buffer = await createWorkbookFixture({
+      pdfFunctionalIssues: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'rutina-pre-formula.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const routineTextIssues = response.body.issues.filter(
+      (issue: { code?: string; cell?: string }) =>
+        issue.code === 'FORMULA_TEXT_IN_CALCULATION_COLUMN' && issue.cell === 'N3',
+    );
+    expect(routineTextIssues).toEqual([]);
+  });
+
+  it('no marca valor cero como dato incompatible en auxiliar acumulador', async () => {
+    const buffer = await createWorkbookFixture({
+      accumulatorAuxiliaryWithZeroValue: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'auxiliar-acumulador-cero.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const auxiliaryZeroIssues = response.body.issues.filter(
+      (issue: { code?: string; entityId?: number }) =>
+        (issue.code === 'AUXILIARY_ACCUMULATOR_HAS_FORMULA' || issue.code === 'SCHEMA_DRIFT') && issue.entityId === 60,
+    );
+    expect(auxiliaryZeroIssues).toEqual([]);
+  });
+
+  it('no cruza Cod de auxiliares con numero de acumuladores', async () => {
+    const buffer = await createWorkbookFixture({
+      pdfFunctionalIssues: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'codigos-independientes.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const crossedCodeIssues = response.body.issues.filter(
+      (issue: { code?: string }) => issue.code === 'AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS',
+    );
+    expect(crossedCodeIssues).toEqual([]);
   });
 
   it('analiza el archivo real de referencia y permite descargas', async () => {

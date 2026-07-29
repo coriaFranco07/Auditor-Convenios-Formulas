@@ -139,6 +139,26 @@ export class IssuesTableComponent implements OnChanges {
       .join(' > ');
   }
 
+  isDuplicateIssue(issue: ValidationIssue): boolean {
+    return issue.code === 'DUPLICATE_IDENTICAL' || issue.code === 'DUPLICATE_CONFLICT' || issue.category === 'DUPLICATES';
+  }
+
+  duplicateRowsLabel(issue: ValidationIssue): string {
+    const rows = (issue.relatedLocations ?? [])
+      .map((location) => location.row)
+      .filter((row): row is number => typeof row === 'number');
+    const uniqueRows = [...new Set(rows)];
+    if (uniqueRows.length === 0 && issue.row) {
+      uniqueRows.push(issue.row);
+    }
+    return uniqueRows.join(', ');
+  }
+
+  duplicateCountLabel(issue: ValidationIssue): string {
+    const count = (issue.relatedLocations?.length ?? 0) || (issue.row ? 1 : 0);
+    return `${count} ${count === 1 ? 'registro' : 'registros'}`;
+  }
+
   private emptySections(): IssueSection[] {
     return this.sectionDefinitions.map((definition) => ({ ...definition, issues: [] }));
   }
