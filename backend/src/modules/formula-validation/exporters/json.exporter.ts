@@ -11,7 +11,6 @@ export const exportJson = (result: StoredValidationResult): Buffer => {
       conceptsAnalyzed: result.summary.conceptsAnalyzed,
       variablesAnalyzed: result.summary.variablesAnalyzed,
       auxiliariesAnalyzed: result.summary.auxiliariesAnalyzed,
-      accumulatorsAnalyzed: result.summary.accumulatorsAnalyzed,
       formulasAnalyzed: result.summary.formulasAnalyzed,
       analysisStartedAt: result.summary.analysisStartedAt,
       analysisFinishedAt: result.summary.analysisFinishedAt,

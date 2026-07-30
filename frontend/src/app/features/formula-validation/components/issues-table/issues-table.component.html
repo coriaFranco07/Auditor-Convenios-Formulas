@@ -36,42 +36,42 @@
           <span>Detalle</span>
         </div>
 
-        <article class="section-row" *ngFor="let issue of section.issues; trackBy: trackIssue">
+        <article class="section-row" *ngFor="let row of section.issues; trackBy: trackIssue">
           <div class="location-card">
             <span class="location-eyebrow">Ubicacion del hallazgo</span>
-            <div class="location-breadcrumb" [attr.aria-label]="locationBreadcrumb(issue)">
-              <strong>{{ issue.sheet || 'Tabla no informada' }}</strong>
+            <div class="location-breadcrumb" [attr.aria-label]="locationBreadcrumb(row)">
+              <strong>{{ row.issue.sheet || 'Tabla no informada' }}</strong>
               <mat-icon>chevron_right</mat-icon>
-              <span>Columna {{ columnLabel(issue) }}</span>
-              <ng-container *ngIf="issue.row">
+              <span>{{ row.columns.length > 1 ? 'Columnas' : 'Columna' }} {{ row.columnLabel }}</span>
+              <ng-container *ngIf="row.issue.row">
                 <mat-icon>chevron_right</mat-icon>
-                <small>Fila {{ issue.row }}</small>
+                <small>Fila {{ row.issue.row }}</small>
               </ng-container>
             </div>
           </div>
 
           <div class="entity-card">
-            <strong>{{ entityLabel(issue) || '-' }}</strong>
-            <span>{{ issue.title }}</span>
+            <strong>{{ entityLabel(row.issue) || '-' }}</strong>
+            <span>{{ row.issue.title }}</span>
           </div>
 
           <div class="message-card">
-            <p>{{ issue.message }}</p>
-            <span *ngIf="issue.recommendation">{{ issue.recommendation }}</span>
-            <div class="suggestion-inline" *ngIf="issue.replacementSuggestions?.length">
+            <p>{{ row.message }}</p>
+            <span *ngIf="row.recommendation">{{ row.recommendation }}</span>
+            <div class="suggestion-inline" *ngIf="row.issue.replacementSuggestions?.length">
               <mat-icon>tips_and_updates</mat-icon>
               <strong>Posible reemplazo:</strong>
-              <span>{{ issue.replacementSuggestions?.[0]?.token }} - {{ issue.replacementSuggestions?.[0]?.label }}</span>
+              <span>{{ row.issue.replacementSuggestions?.[0]?.token }} - {{ row.issue.replacementSuggestions?.[0]?.label }}</span>
             </div>
-            <div class="duplicate-inline" *ngIf="isDuplicateIssue(issue) && duplicateRowsLabel(issue)">
+            <div class="duplicate-inline" *ngIf="isDuplicateIssue(row.issue) && duplicateRowsLabel(row.issue)">
               <mat-icon>format_list_numbered</mat-icon>
-              <strong>{{ duplicateCountLabel(issue) }}</strong>
-              <span>Filas: {{ duplicateRowsLabel(issue) }}</span>
+              <strong>{{ duplicateCountLabel(row.issue) }}</strong>
+              <span>Filas: {{ duplicateRowsLabel(row.issue) }}</span>
             </div>
           </div>
 
           <div class="action-cell">
-            <button class="detail-button" mat-icon-button type="button" matTooltip="Abrir detalle" (click)="openDetail(issue)">
+            <button class="detail-button" mat-icon-button type="button" matTooltip="Abrir detalle" (click)="openDetail(row)">
               <mat-icon>open_in_new</mat-icon>
             </button>
           </div>

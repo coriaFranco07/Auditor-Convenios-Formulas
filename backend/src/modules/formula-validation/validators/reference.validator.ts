@@ -18,6 +18,9 @@ export class ReferenceValidator implements ValidationRule {
         if (reference.type === 'N' || reference.type === 'I') {
           return;
         }
+        if (reference.type === 'L' && !context.sheets.variables) {
+          return;
+        }
         const exists = this.referenceExists(reference.type, reference.id, tables);
         if (exists) {
           return;

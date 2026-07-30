@@ -11,7 +11,17 @@ interface IssueSectionDefinition {
 }
 
 interface IssueSection extends IssueSectionDefinition {
+  issues: IssueTableRow[];
+}
+
+interface IssueTableRow {
+  id: string;
+  issue: ValidationIssue;
   issues: ValidationIssue[];
+  columns: string[];
+  columnLabel: string;
+  message: string;
+  recommendation?: string;
 }
 
 @Component({
@@ -41,7 +51,7 @@ export class IssuesTableComponent implements OnChanges {
     {
       id: 'functional',
       title: 'Auditoria funcional del PDF',
-      description: 'Controles de unidad, totaliza, secuencia, pre/post formula, auxiliares y acumuladores segun el manual.',
+      description: 'Controles de unidad, totaliza, pre/post formula y auxiliares segun el manual.',
       icon: 'rule_folder'
     },
     {
@@ -59,7 +69,7 @@ export class IssuesTableComponent implements OnChanges {
     {
       id: 'support',
       title: 'Controles de soporte',
-      description: 'Problemas propios de calculos de soporte, acumulaciones y operaciones relacionadas.',
+      description: 'Problemas propios de calculos auxiliares usados por las formulas.',
       icon: 'account_tree'
     },
     {
@@ -82,16 +92,16 @@ export class IssuesTableComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['issues']) {
       this.filteredIssues = this.issues;
-      this.sections = this.groupIssues(this.filteredIssues);
+      this.sections = this.groupIssues(this.mergeEquivalentIssues(this.filteredIssues));
     }
   }
 
-  openDetail(issue: ValidationIssue): void {
+  openDetail(row: IssueTableRow): void {
     this.dialog.open(IssueDetailDialogComponent, {
       width: '760px',
       maxWidth: '94vw',
       data: {
-        issue,
+        issue: this.detailIssue(row),
         validationId: this.validationId
       }
     });
@@ -119,21 +129,13 @@ export class IssuesTableComponent implements OnChanges {
 
   trackSection = (_index: number, section: IssueSection): string => section.id;
 
-  trackIssue = (_index: number, issue: ValidationIssue): string => issue.id;
+  trackIssue = (_index: number, row: IssueTableRow): string => row.id;
 
-  sectionTotal(sectionId: string): number {
-    return this.sections.find((section) => section.id === sectionId)?.issues.length ?? 0;
-  }
-
-  columnLabel(issue: ValidationIssue): string {
-    return issue.column || this.columnFromCell(issue.cell) || '-';
-  }
-
-  locationBreadcrumb(issue: ValidationIssue): string {
+  locationBreadcrumb(row: IssueTableRow): string {
     return [
-      issue.sheet || 'Tabla no informada',
-      `Columna ${this.columnLabel(issue)}`,
-      issue.row ? `Fila ${issue.row}` : undefined
+      row.issue.sheet || 'Tabla no informada',
+      `${row.columns.length > 1 ? 'Columnas' : 'Columna'} ${row.columnLabel}`,
+      row.issue.row ? `Fila ${row.issue.row}` : undefined
     ]
       .filter(Boolean)
       .join(' > ');
@@ -163,16 +165,202 @@ export class IssuesTableComponent implements OnChanges {
     return this.sectionDefinitions.map((definition) => ({ ...definition, issues: [] }));
   }
 
-  private groupIssues(issues: ValidationIssue[]): IssueSection[] {
-    const grouped = new Map(this.sectionDefinitions.map((definition) => [definition.id, [] as ValidationIssue[]]));
-    issues.forEach((issue) => {
-      const sectionId = this.resolveSection(issue);
-      grouped.get(sectionId)?.push(issue);
+  private groupIssues(rows: IssueTableRow[]): IssueSection[] {
+    const grouped = new Map(this.sectionDefinitions.map((definition) => [definition.id, [] as IssueTableRow[]]));
+    rows.forEach((row) => {
+      const sectionId = this.resolveSection(row.issue);
+      grouped.get(sectionId)?.push(row);
     });
     return this.sectionDefinitions.map((definition) => ({
       ...definition,
       issues: grouped.get(definition.id) ?? []
     }));
+  }
+
+  private mergeEquivalentIssues(issues: ValidationIssue[]): IssueTableRow[] {
+    const groups = new Map<string, IssueTableRow>();
+
+    issues.forEach((issue) => {
+      const key = this.issueGroupKey(issue);
+      const column = this.issueColumnLabel(issue);
+      const existing = groups.get(key);
+
+      if (existing) {
+        existing.issues.push(issue);
+        existing.columns = this.mergeColumns(existing.columns, column);
+        existing.columnLabel = this.columnListLabel(existing.columns);
+        existing.message = this.messageLabel(existing);
+        existing.recommendation = this.recommendationLabel(existing);
+        return;
+      }
+
+      const columns = column && column !== '-' ? [column] : [];
+      const row: IssueTableRow = {
+        id: key,
+        issue,
+        issues: [issue],
+        columns,
+        columnLabel: this.columnListLabel(columns) || '-',
+        message: issue.message,
+        recommendation: issue.recommendation
+      };
+      row.message = this.messageLabel(row);
+      row.recommendation = this.recommendationLabel(row);
+      groups.set(key, row);
+    });
+
+    return Array.from(groups.values());
+  }
+
+  private issueGroupKey(issue: ValidationIssue): string {
+    if (this.isMissingReferenceIssue(issue)) {
+      return [
+        issue.category,
+        issue.code,
+        issue.severity,
+        issue.sheet ?? '',
+        issue.row ?? '',
+        issue.entityType ?? '',
+        issue.entityId ?? '',
+        issue.entityName ?? '',
+        issue.formula ?? '',
+        issue.blocksImport ? '1' : '0'
+      ].join('\u001f');
+    }
+
+    return [
+      issue.code,
+      issue.category,
+      issue.severity,
+      issue.sheet ?? '',
+      issue.row ?? '',
+      issue.entityType ?? '',
+      issue.entityId ?? '',
+      issue.entityName ?? '',
+      issue.message ?? '',
+      issue.explanation ?? '',
+      issue.recommendation ?? '',
+      issue.formula ?? issue.invalidFragment ?? '',
+      issue.blocksImport ? '1' : '0'
+    ].join('\u001f');
+  }
+
+  private detailIssue(row: IssueTableRow): ValidationIssue {
+    const fragments = this.missingReferenceFragments(row);
+    return {
+      ...row.issue,
+      column: row.columnLabel,
+      cell: row.columns.length === 1 ? row.issue.cell : undefined,
+      message: row.message,
+      recommendation: row.recommendation,
+      invalidFragment: fragments.length > 1 ? this.textListLabel(fragments) : row.issue.invalidFragment
+    };
+  }
+
+  private issueColumnLabel(issue: ValidationIssue): string {
+    return issue.column || this.columnFromCell(issue.cell) || '-';
+  }
+
+  private mergeColumns(columns: string[], column: string): string[] {
+    const unique = new Set([...columns, column].filter((value) => value && value !== '-'));
+    return Array.from(unique).sort((left, right) => this.columnNumber(left) - this.columnNumber(right));
+  }
+
+  private columnNumber(column: string): number {
+    return column
+      .toUpperCase()
+      .split('')
+      .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+  }
+
+  private columnListLabel(columns: string[]): string {
+    if (columns.length === 0) {
+      return '-';
+    }
+    return this.textListLabel(columns);
+  }
+
+  private messageLabel(row: IssueTableRow): string {
+    const fragments = this.missingReferenceFragments(row);
+    if (fragments.length <= 1) {
+      return row.issue.message;
+    }
+
+    return `La formula contiene referencias inexistentes: ${this.textListLabel(fragments)}. No existen en ${this.referenceTargetsLabel(row.issues)}.`;
+  }
+
+  private recommendationLabel(row: IssueTableRow): string | undefined {
+    const fragments = this.missingReferenceFragments(row);
+    if (fragments.length <= 1) {
+      return row.issue.recommendation;
+    }
+
+    return `Revisar juntas las referencias faltantes ${this.textListLabel(fragments)}. Crear las definiciones faltantes o corregir los identificadores usados en la formula indicada.`;
+  }
+
+  private missingReferenceFragments(row: IssueTableRow): string[] {
+    if (!row.issues.every((issue) => this.isMissingReferenceIssue(issue))) {
+      return [];
+    }
+    return this.uniqueText(row.issues.map((issue) => issue.invalidFragment ?? ''));
+  }
+
+  private isMissingReferenceIssue(issue: ValidationIssue): boolean {
+    return (
+      issue.category === 'REFERENCES' &&
+      Boolean(issue.invalidFragment) &&
+      [
+        'MISSING_AUXILIARY_REFERENCE',
+        'MISSING_CONCEPT_REFERENCE',
+        'MISSING_LEG_VARIABLE_REFERENCE'
+      ].includes(issue.code)
+    );
+  }
+
+  private referenceTargetsLabel(issues: ValidationIssue[]): string {
+    const labels = this.uniqueText(issues.map((issue) => this.referenceTargetName(issue)));
+    if (labels.length === 1) {
+      return `la tabla de ${labels[0]}`;
+    }
+    return `las tablas correspondientes (${this.textListLabel(labels)})`;
+  }
+
+  private referenceTargetName(issue: ValidationIssue): string {
+    if (issue.referenceType === 'A') {
+      return 'calculo auxiliar';
+    }
+    if (issue.referenceType === 'L') {
+      return 'variable de legajo';
+    }
+    if (issue.referenceType === 'N' || issue.referenceType === 'I') {
+      return 'novedad/concepto';
+    }
+    return 'concepto';
+  }
+
+  private uniqueText(values: string[]): string[] {
+    const seen = new Set<string>();
+    return values.filter((value) => {
+      const cleanValue = value.trim();
+      if (!cleanValue || seen.has(cleanValue)) {
+        return false;
+      }
+      seen.add(cleanValue);
+      return true;
+    });
+  }
+
+  private textListLabel(values: string[]): string {
+    if (values.length === 0) {
+      return '';
+    }
+    if (values.length === 1) {
+      return values[0];
+    }
+    if (values.length === 2) {
+      return `${values[0]} y ${values[1]}`;
+    }
+    return `${values.slice(0, -1).join(', ')} y ${values[values.length - 1]}`;
   }
 
   private resolveSection(issue: ValidationIssue): string {
@@ -202,10 +390,7 @@ export class IssuesTableComponent implements OnChanges {
       code === 'PRE_POST_WITHOUT_MAIN_FORMULA' ||
       code === 'AUXILIARY_VALUE_MISSING' ||
       code === 'AUXILIARY_VALUE_HAS_FORMULA' ||
-      code === 'AUXILIARY_ACCUMULATOR_HAS_FORMULA' ||
-      code === 'AUXILIARY_FORMULA_HAS_ACCUMULATOR_COMPONENTS' ||
-      code === 'ACCUMULATOR_CONCEPT_NAME_MISMATCH' ||
-      code === 'ACCUMULATOR_CONTRADICTORY_OPERATION'
+      code === 'AUXILIARY_ACCUMULATOR_HAS_FORMULA'
     ) {
       return 'functional';
     }
@@ -227,12 +412,8 @@ export class IssuesTableComponent implements OnChanges {
 
     if (
       category === 'AUXILIARIES' ||
-      category === 'ACCUMULATORS' ||
       issue.entityType === 'AUXILIARY' ||
-      issue.entityType === 'ACCUMULATOR' ||
-      code === 'INVALID_AUXILIARY_ROW' ||
-      code === 'INVALID_ACCUMULATOR_ROW' ||
-      code === 'MISSING_ACCUMULATOR_ID'
+      code === 'INVALID_AUXILIARY_ROW'
     ) {
       return 'support';
     }

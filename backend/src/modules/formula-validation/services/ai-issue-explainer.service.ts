@@ -17,10 +17,10 @@ const PDF_DOMAIN_CONTEXT = `
 El PDF funcional describe un archivo Excel de formulas de liquidacion de sueldos.
 Hojas principales:
 - Conceptos y Formulas (1): conceptos de liquidacion, condiciones, formulas mensuales/jornales, unidades, pre/post formula.
-- Variables de Legajos (2): variables del empleado o legajo. En formulas se referencian como L[n].
 - Calculo Auxiliares (3): calculos auxiliares reutilizables. En formulas se referencian como A[n].
-- Acumuladores (4): agrupaciones que suman/restan conceptos y tambien alimentan calculos auxiliares A[n].
-- Convenios (5): catalogo de convenios.
+Tablas de soporte:
+- Variables de Legajos (2): variables del empleado o legajo. En formulas se referencian como L[n].
+Nota de alcance: esta auditoria no valida la hoja Acumuladores (4); se concentra en las tablas donde se cargan formulas.
 Referencias del lenguaje:
 - A[n]: resultado de un calculo auxiliar.
 - R[n]: importe calculado de un concepto.

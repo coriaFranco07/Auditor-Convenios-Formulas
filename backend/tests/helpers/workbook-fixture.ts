@@ -21,6 +21,7 @@ const conceptHeaders = [
 
 export interface FixtureOptions {
   omitVariablesSheet?: boolean;
+  omitAuxiliariesSheet?: boolean;
   missingReference?: boolean;
   duplicateConflict?: boolean;
   invalidCondition?: boolean;
@@ -37,6 +38,8 @@ export interface FixtureOptions {
   externalNoveltyReferences?: boolean;
   repeatedMissingReference?: boolean;
   accumulatorAuxiliaryWithZeroValue?: boolean;
+  sameMissingReferenceAcrossColumns?: boolean;
+  multipleMissingReferencesInOneFormula?: boolean;
 }
 
 export const createWorkbookFixture = async (options: FixtureOptions = {}): Promise<Buffer> => {
@@ -55,13 +58,13 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
       ? 'L[10] mas N[1]'
       : options.semanticTypeMismatch
       ? 'SI(L[10]; 1; 0)'
-      : options.missingReference
+      : options.missingReference || options.sameMissingReferenceAcrossColumns
       ? 'A[6] / 24 * N[1]'
       : 'L[10]',
     options.incompleteConceptFormula ? '0' : null,
     'N[1]',
     null,
-    options.scopeMismatch ? 'L[10]' : null,
+    options.sameMissingReferenceAcrossColumns ? 'A[6] / 24 * N[1]' : options.scopeMismatch ? 'L[10]' : null,
     null,
     null,
     12,
@@ -97,6 +100,10 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     concepts.addRow([21, 'REFERENCIA REPETIDA', 'Automatica', 'Mensual', null, 'U[999] + U[999]', null, null, null, null, null, null, 12, null, null, 21]);
   }
 
+  if (options.multipleMissingReferencesInOneFormula) {
+    concepts.addRow([22, 'MULTIPLES REFERENCIAS', 'Automatica', 'Mensual', null, 'R[991] + R[992] + R[993]', null, null, null, null, null, null, 12, null, null, 22]);
+  }
+
   if (!options.omitVariablesSheet) {
     const variables = workbook.addWorksheet('Variables de Legajos (2)');
     variables.addRow(['e-Sueldos_datos_exportados_test']);
@@ -104,22 +111,24 @@ export const createWorkbookFixture = async (options: FixtureOptions = {}): Promi
     variables.addRow([10, 'ASIGNACION MENSUAL', 'ASIG']);
   }
 
-  const auxiliaries = workbook.addWorksheet('Calculo Auxiliares (3)');
-  auxiliaries.addRow(['Cod', 'Items', 'Algorit.Verdadero', 'Algorit.Falso', 'Condicion', 'Valor', 'Clase']);
-  if (options.indirectCycle) {
-    auxiliaries.addRow([10, 'AUX CICLO', 'R[2]', null, null, null, 'F']);
-  }
-  if (options.invalidAuxiliary) {
-    auxiliaries.addRow([20, 'AUX INVALIDO', null, 'L[10]', null, null, 'F']);
-  }
+  if (!options.omitAuxiliariesSheet) {
+    const auxiliaries = workbook.addWorksheet('Calculo Auxiliares (3)');
+    auxiliaries.addRow(['Cod', 'Items', 'Algorit.Verdadero', 'Algorit.Falso', 'Condicion', 'Valor', 'Clase']);
+    if (options.indirectCycle) {
+      auxiliaries.addRow([10, 'AUX CICLO', 'R[2]', null, null, null, 'F']);
+    }
+    if (options.invalidAuxiliary) {
+      auxiliaries.addRow([20, 'AUX INVALIDO', null, 'L[10]', null, null, 'F']);
+    }
 
-  if (options.pdfFunctionalIssues) {
-    auxiliaries.addRow([30, 'VALOR FIJO SIN VALOR', null, null, null, null, 'V']);
-    auxiliaries.addRow([31, 'FORMULA CON COMPONENTES', 'L[10]', null, null, null, 'F']);
-    auxiliaries.addRow([32, 'ACUMULADOR CON FORMULA', 'L[10]', null, null, null, 'A']);
-  }
-  if (options.accumulatorAuxiliaryWithZeroValue) {
-    auxiliaries.addRow([60, 'ACUMULADOR CON CERO', null, null, null, 0, 'A']);
+    if (options.pdfFunctionalIssues) {
+      auxiliaries.addRow([30, 'VALOR FIJO SIN VALOR', null, null, null, null, 'V']);
+      auxiliaries.addRow([31, 'FORMULA CON COMPONENTES', 'L[10]', null, null, null, 'F']);
+      auxiliaries.addRow([32, 'ACUMULADOR CON FORMULA', 'L[10]', null, null, null, 'A']);
+    }
+    if (options.accumulatorAuxiliaryWithZeroValue) {
+      auxiliaries.addRow([60, 'ACUMULADOR CON CERO', null, null, null, 0, 'A']);
+    }
   }
 
   const accumulators = workbook.addWorksheet('Acumuladores (4)');

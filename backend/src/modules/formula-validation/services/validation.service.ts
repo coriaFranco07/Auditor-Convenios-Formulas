@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { createIssue } from '../domain/issue-factory';
 import { addReplacementSuggestions } from '../domain/replacement-suggestion.factory';
 import { ExcelReaderService } from './excel-reader.service';
-import { AccumulatorValidator } from '../validators/accumulator.validator';
 import { AuxiliaryValidator } from '../validators/auxiliary.validator';
 import { CatalogValidator } from '../validators/catalog.validator';
 import { CircularDependencyValidator } from '../validators/circular-dependency.validator';
@@ -22,8 +21,11 @@ import {
   ValidationIssue,
   ValidationSummary,
 } from '../types/validation.types';
+import { WorkbookContext } from '../types/workbook.types';
 import { ValidationRepository } from '../repositories/validation.repository';
 import { AiIssueExplainerService } from './ai-issue-explainer.service';
+import { FormulaManualService } from './formula-manual.service';
+import { FormulaManualResponse } from '../types/formula-manual.types';
 
 export class ValidationService {
   private readonly reader = new ExcelReaderService();
@@ -38,13 +40,13 @@ export class ValidationService {
     new FunctionalAuditValidator(),
     new CircularDependencyValidator(),
     new AuxiliaryValidator(),
-    new AccumulatorValidator(),
     new CatalogValidator(),
   ];
 
   constructor(
     private readonly repository: ValidationRepository,
     private readonly aiExplainer = new AiIssueExplainerService(),
+    private readonly formulaManual = new FormulaManualService(),
   ) {}
 
   async analyze(filePath: string, fileName: string): Promise<StoredValidationResult> {
@@ -64,11 +66,11 @@ export class ValidationService {
         issues,
         started,
         finished,
-        sheetsAnalyzed: Object.keys(context.sheets).length,
+        sheetsAnalyzed: this.auditedSheetsAnalyzed(context),
         conceptsAnalyzed: context.concepts.length,
         variablesAnalyzed: context.variables.length,
         auxiliariesAnalyzed: context.auxiliaries.length,
-        accumulatorsAnalyzed: context.accumulators.length,
+        accumulatorsAnalyzed: 0,
         formulasAnalyzed: context.formulaCells.length,
       });
       return this.repository.save({
@@ -143,6 +145,16 @@ export class ValidationService {
     return issue;
   }
 
+  async manual(validationId: string): Promise<FormulaManualResponse | undefined> {
+    const result = await this.repository.findById(validationId);
+    if (!result?.sourceBuffer) {
+      return undefined;
+    }
+
+    const context = await this.reader.readBuffer(result.sourceBuffer, result.fileName);
+    return this.formulaManual.build(context, result);
+  }
+
   publicResult(result: StoredValidationResult): Omit<StoredValidationResult, 'sourceBuffer'> {
     const { sourceBuffer: _sourceBuffer, ...publicResult } = result;
     return publicResult;
@@ -179,6 +191,11 @@ export class ValidationService {
       analysisFinishedAt: input.finished.toISOString(),
       durationMs: input.finished.getTime() - input.started.getTime(),
     };
+  }
+
+  private auditedSheetsAnalyzed(context: Pick<WorkbookContext, 'sheets'>): number {
+    const auditedKeys: Array<keyof WorkbookContext['sheets']> = ['concepts', 'auxiliaries'];
+    return auditedKeys.filter((key) => Boolean(context.sheets[key])).length;
   }
 
   private resolveStatus(issues: ValidationIssue[]): AnalysisStatus {

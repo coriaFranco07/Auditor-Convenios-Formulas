@@ -2,7 +2,12 @@ import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
-import { ValidationHistoryItem, ValidationIssue, ValidationResult } from '../models/validation.models';
+import {
+  FormulaManualResponse,
+  ValidationHistoryItem,
+  ValidationIssue,
+  ValidationResult
+} from '../models/validation.models';
 
 @Injectable({ providedIn: 'root' })
 export class ValidationApiService {
@@ -37,5 +42,9 @@ export class ValidationApiService {
 
   explainIssue(validationId: string, issueId: string): Observable<ValidationIssue> {
     return this.http.post<ValidationIssue>(`${this.baseUrl}/${validationId}/issues/${issueId}/explain`, {});
+  }
+
+  getManual(validationId: string): Observable<FormulaManualResponse> {
+    return this.http.get<FormulaManualResponse>(`${this.baseUrl}/${validationId}/manual`);
   }
 }

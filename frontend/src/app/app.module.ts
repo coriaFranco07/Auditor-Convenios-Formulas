@@ -8,7 +8,7 @@ import { MaterialModule } from './material.module';
 import { FormulaValidationPageComponent } from './features/formula-validation/pages/formula-validation-page.component';
 import { IssuesTableComponent } from './features/formula-validation/components/issues-table/issues-table.component';
 import { IssueDetailDialogComponent } from './features/formula-validation/dialogs/issue-detail-dialog.component';
-import { FormulaTranslatorComponent } from './features/formula-validation/components/formula-translator/formula-translator.component';
+import { FormulaManualComponent } from './features/formula-validation/components/formula-manual/formula-manual.component';
 import { UploadPanelComponent } from './features/formula-validation/components/upload-panel/upload-panel.component';
 
 @NgModule({
@@ -17,7 +17,7 @@ import { UploadPanelComponent } from './features/formula-validation/components/u
     FormulaValidationPageComponent,
     IssuesTableComponent,
     IssueDetailDialogComponent,
-    FormulaTranslatorComponent,
+    FormulaManualComponent,
     UploadPanelComponent
   ],
   imports: [

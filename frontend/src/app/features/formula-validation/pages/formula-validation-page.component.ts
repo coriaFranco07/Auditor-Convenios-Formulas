@@ -5,7 +5,7 @@ import { finalize } from 'rxjs';
 import { ValidationHistoryItem, ValidationResult } from '../models/validation.models';
 import { ValidationApiService } from '../services/validation-api.service';
 
-type ModuleView = 'upload' | 'history' | 'translator' | 'findings';
+type ModuleView = 'upload' | 'history' | 'manual' | 'findings';
 
 interface NavigationModule {
   id: ModuleView;
@@ -47,10 +47,10 @@ export class FormulaValidationPageComponent implements OnInit {
       requiresResult: false
     },
     {
-      id: 'translator',
-      title: 'Traductor de formulas',
-      caption: 'Lectura funcional',
-      icon: 'translate',
+      id: 'manual',
+      title: 'Manual explicativo',
+      caption: 'Fichas por concepto',
+      icon: 'menu_book',
       requiresResult: true
     },
     {
@@ -271,7 +271,7 @@ export class FormulaValidationPageComponent implements OnInit {
     return (
       view === 'upload' ||
       view === 'history' ||
-      view === 'translator' ||
+      view === 'manual' ||
       view === 'findings'
     );
   }

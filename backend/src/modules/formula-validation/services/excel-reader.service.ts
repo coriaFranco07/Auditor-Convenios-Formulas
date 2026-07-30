@@ -51,6 +51,10 @@ const getCellValue = (worksheet: ExcelJS.Worksheet, row: number, column: number)
 export class ExcelReaderService {
   async read(filePath: string, originalFileName: string): Promise<WorkbookContext> {
     const sourceBuffer = await fs.readFile(filePath);
+    return this.readBuffer(sourceBuffer, originalFileName);
+  }
+
+  async readBuffer(sourceBuffer: Buffer, originalFileName: string): Promise<WorkbookContext> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(sourceBuffer);
 

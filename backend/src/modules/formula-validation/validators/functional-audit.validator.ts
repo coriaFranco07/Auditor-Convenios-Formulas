@@ -1,11 +1,9 @@
-import { normalizeText } from '../../../config/schema';
 import { createIssue } from '../domain/issue-factory';
 import { uniqueReferences } from '../domain/formula-analysis';
 import { isBlank } from '../domain/normalization';
 import { FormulaReference } from '../types/formula.types';
 import { IssueCodes, ValidationIssue } from '../types/validation.types';
 import {
-  AccumulatorRecord,
   AuxiliaryRecord,
   CellLocation,
   ConceptRecord,
@@ -32,7 +30,6 @@ export class FunctionalAuditValidator implements ValidationRule {
       ...this.validateFormulaRoleReferences(context),
       ...this.validateConceptPdfFields(context),
       ...this.validateAuxiliaryPdfRules(context),
-      ...this.validateAccumulatorPdfRules(context),
     ];
   }
 
@@ -173,101 +170,13 @@ export class FunctionalAuditValidator implements ValidationRule {
               IssueCodes.AUXILIARY_ACCUMULATOR_HAS_FORMULA,
               'Auxiliar acumulador con formula o valor',
               `El auxiliar A[${auxiliary.id ?? '?'}] esta marcado como acumulador, pero tiene datos de formula, condicion o valor.`,
-              'El PDF separa auxiliares acumuladores de auxiliares por formula. Un acumulador deberia explicarse desde sus componentes en Acumuladores.',
+              'El PDF separa los auxiliares de clase A de los auxiliares calculados por formula. Mezclar clase A con formula vuelve ambigua la lectura funcional.',
               'Confirmar si debe ser clase F/V o quitar los datos que no corresponden al acumulador.',
               'WARNING',
             ),
           );
         }
       }
-    });
-
-    return issues;
-  }
-
-  private validateAccumulatorPdfRules(context: WorkbookContext): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const conceptsById = this.groupById(context.concepts);
-    const accumulatorConceptOperations = new Map<string, AccumulatorRecord[]>();
-    const nameMismatchEmitted = new Set<string>();
-
-    context.accumulators.forEach((accumulator) => {
-      if (accumulator.id !== undefined && accumulator.conceptId !== undefined) {
-        const key = `${accumulator.id}|${accumulator.conceptId}`;
-        const current = accumulatorConceptOperations.get(key) ?? [];
-        current.push(accumulator);
-        accumulatorConceptOperations.set(key, current);
-      }
-
-      if (accumulator.conceptId === undefined || isBlank(accumulator.conceptName)) {
-        return;
-      }
-
-      const concepts = conceptsById.get(accumulator.conceptId) ?? [];
-      const key = `${accumulator.id}|${accumulator.conceptId}`;
-      const candidateNames = concepts.map((concept) => concept.name).filter((name): name is string => !isBlank(name));
-      if (
-        candidateNames.length === 0 ||
-        nameMismatchEmitted.has(key) ||
-        candidateNames.some((conceptName) => this.namesMatch(accumulator.conceptName, conceptName))
-      ) {
-        return;
-      }
-      nameMismatchEmitted.add(key);
-
-      issues.push(
-        createIssue({
-          code: IssueCodes.ACCUMULATOR_CONCEPT_NAME_MISMATCH,
-          severity: 'WARNING',
-          category: 'FUNCTIONAL_AUDIT',
-          title: 'Nombre de concepto distinto en acumulador',
-          message: `El acumulador ${accumulator.id ?? 'sin codigo'} usa el concepto ${accumulator.conceptId}, pero el nombre cargado es "${accumulator.conceptName}" y no coincide con los nombres disponibles en Conceptos: ${this.conceptCandidatesLabel(concepts)}.`,
-          explanation:
-            'El PDF usa la hoja Acumuladores para explicar que conceptos componen un auxiliar. Si el nombre no coincide, la contadora puede revisar el componente equivocado.',
-          recommendation:
-            'Corregir el nombre del concepto en Acumuladores o confirmar que el codigo de concepto sea el correcto.',
-          location: accumulator.sourceColumns.conceptName ?? accumulator.sourceColumns.conceptId,
-          entityType: 'ACCUMULATOR',
-          entityId: accumulator.id,
-          entityName: accumulator.name,
-          referenceType: 'R',
-          referenceId: accumulator.conceptId,
-          relatedLocations: [
-            this.recordLocation(accumulator),
-            ...concepts.map((concept) => this.recordLocation(concept)),
-          ],
-          blocksImport: false,
-        }),
-      );
-    });
-
-    accumulatorConceptOperations.forEach((records) => {
-      const operations = new Set(records.map((record) => normalizeText(String(record.operation ?? ''))));
-      if (!operations.has('suma') || !operations.has('resta')) {
-        return;
-      }
-      const first = records[0];
-      issues.push(
-        createIssue({
-          code: IssueCodes.ACCUMULATOR_CONTRADICTORY_OPERATION,
-          severity: 'WARNING',
-          category: 'FUNCTIONAL_AUDIT',
-          title: 'Concepto sumado y restado en el mismo acumulador',
-          message: `El acumulador ${first.id} incluye el concepto ${first.conceptId} como Suma y tambien como Resta.`,
-          explanation:
-            'Si un mismo componente entra con operaciones opuestas dentro del mismo acumulador, puede anularse o duplicar una correccion funcional.',
-          recommendation:
-            'Confirmar si la compensacion es intencional. Si no lo es, dejar una sola operacion para ese concepto dentro del acumulador.',
-          location: first.sourceColumns.id,
-          entityType: 'ACCUMULATOR',
-          entityId: first.id,
-          entityName: first.name,
-          referenceType: 'R',
-          referenceId: first.conceptId,
-          relatedLocations: records.map((record) => this.recordLocation(record)),
-          blocksImport: false,
-        }),
-      );
     });
 
     return issues;
@@ -329,25 +238,6 @@ export class FunctionalAuditValidator implements ValidationRule {
     });
   }
 
-  private groupById<T extends { id?: number }>(records: T[]): Map<number, T[]> {
-    const map = new Map<number, T[]>();
-    records.forEach((record) => {
-      if (record.id === undefined) {
-        return;
-      }
-      const current = map.get(record.id) ?? [];
-      current.push(record);
-      map.set(record.id, current);
-    });
-    return map;
-  }
-
-  private conceptCandidatesLabel(concepts: ConceptRecord[]): string {
-    return concepts
-      .map((concept) => `fila ${concept.row} "${concept.name ?? 'sin nombre'}"`)
-      .join('; ');
-  }
-
   private referenceList(references: FormulaReference[]): string {
     return references.map((reference) => `${reference.type}[${reference.id ?? reference.rawId}]`).join(', ');
   }
@@ -397,27 +287,4 @@ export class FunctionalAuditValidator implements ValidationRule {
     return normalized !== '0' && normalized !== '0.0' && normalized !== '0.00';
   }
 
-  private namesMatch(left: unknown, right: unknown): boolean {
-    const normalizeName = (value: unknown): string =>
-      normalizeText(String(value ?? '')).replace(/[^a-z0-9]/g, '');
-    const normalizedLeft = normalizeName(left);
-    const normalizedRight = normalizeName(right);
-    return (
-      normalizedLeft === normalizedRight ||
-      normalizedLeft.includes(normalizedRight) ||
-      normalizedRight.includes(normalizedLeft)
-    );
-  }
-
-  private recordLocation(record: { sheet: string; row: number; sourceColumns: Record<string, CellLocation> }): CellLocation {
-    return (
-      record.sourceColumns.id ??
-      record.sourceColumns.conceptId ??
-      record.sourceColumns.name ??
-      Object.values(record.sourceColumns)[0] ?? {
-        sheet: record.sheet,
-        row: record.row,
-      }
-    );
-  }
 }

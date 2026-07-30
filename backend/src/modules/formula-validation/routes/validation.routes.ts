@@ -30,6 +30,7 @@ export const createValidationRouter = (controller: ValidationController): Router
   router.post('/:validationId/issues/:issueId/explain', controller.explainIssue);
   router.get('/', controller.list);
   router.get('/:validationId', controller.get);
+  router.get('/:validationId/manual', controller.manual);
   router.get('/:validationId/export/json', controller.exportJson);
   router.get('/:validationId/export/csv', controller.exportCsv);
   router.get('/:validationId/export/xlsx', controller.exportXlsx);

@@ -1,0 +1,291 @@
+<section class="manual-panel">
+  <header class="manual-header">
+    <span class="panel-icon">
+      <mat-icon>menu_book</mat-icon>
+    </span>
+    <div>
+      <span>Manual explicativo</span>
+      <h2>Manual de formulas</h2>
+      <p>Ficha funcional por concepto y auxiliar, siguiendo la estructura del PDF.</p>
+    </div>
+    <button mat-stroked-button type="button" (click)="loadManual()" [disabled]="loading">
+      <mat-icon>refresh</mat-icon>
+      Actualizar
+    </button>
+  </header>
+
+  <div *ngIf="loading" class="manual-state">
+    <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+    <strong>Generando manual...</strong>
+    <span>Estamos leyendo conceptos, auxiliares, referencias y formulas.</span>
+  </div>
+
+  <div *ngIf="!loading && errorMessage" class="manual-state error">
+    <mat-icon>error_outline</mat-icon>
+    <strong>{{ errorMessage }}</strong>
+  </div>
+
+  <ng-container *ngIf="!loading && !errorMessage && manual">
+    <div class="manual-layout">
+      <aside class="manual-index">
+        <div class="index-tools">
+          <label>
+            <span>Buscar</span>
+            <input type="search" placeholder="Concepto, auxiliar o numero" [value]="searchTerm" (input)="onSearch($event)" />
+          </label>
+
+          <div class="filter-tabs">
+            <button
+              *ngFor="let filter of filters"
+              type="button"
+              [class.active]="typeFilter === filter.id"
+              (click)="setFilter(filter.id)"
+            >
+              {{ filter.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="index-summary">
+          <span>
+            <strong>{{ manual.totals.concepts }}</strong>
+            Conceptos
+          </span>
+          <span>
+            <strong>{{ manual.totals.auxiliaries }}</strong>
+            Auxiliares
+          </span>
+        </div>
+
+        <div class="manual-list">
+          <button
+            *ngFor="let item of filteredItems; trackBy: trackItem"
+            type="button"
+            [class.active]="selectedItem?.id === item.id"
+            (click)="selectItem(item)"
+          >
+            <span class="item-token">{{ itemCode(item) }}</span>
+            <span>
+              <strong>{{ item.name }}</strong>
+              <small>{{ itemTypeLabel(item) }} - fila {{ item.row }}</small>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <article *ngIf="selectedItem as item; else emptySelection" class="manual-document">
+        <section class="document-hero">
+          <div>
+            <span>{{ itemTypeLabel(item) }}</span>
+            <h3>{{ item.title }}</h3>
+            <p>{{ locationLabel(item) }}</p>
+          </div>
+          <span class="document-count">{{ item.formulas.length }} formulas</span>
+        </section>
+
+        <section class="document-section objective-section">
+          <div class="section-heading">
+            <span class="section-icon">
+              <mat-icon>flag</mat-icon>
+            </span>
+            <div>
+              <span>Objetivo y lectura general</span>
+              <h4>Que explica este item</h4>
+            </div>
+          </div>
+          <p>{{ item.objective }}</p>
+          <p>{{ item.summary }}</p>
+        </section>
+
+        <section class="attribute-grid">
+          <article *ngFor="let attribute of item.attributes">
+            <span>{{ attribute.label }}</span>
+            <strong>{{ attribute.value }}</strong>
+          </article>
+        </section>
+
+        <section class="document-section">
+          <div class="section-heading">
+            <span class="section-icon">
+              <mat-icon>functions</mat-icon>
+            </span>
+            <div>
+              <span>Formulas, condiciones y unidades</span>
+              <h4>Detalle de calculo</h4>
+            </div>
+          </div>
+
+          <mat-accordion class="formula-accordion" multi>
+            <mat-expansion-panel
+              *ngFor="let formula of item.formulas; trackBy: trackFormula"
+              [expanded]="item.formulas.length <= 3"
+            >
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <strong>{{ formula.title }}</strong>
+                </mat-panel-title>
+                <mat-panel-description>{{ formulaLocation(formula) }}</mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <div class="formula-detail">
+                <div class="formula-readable">
+                  <span>Lectura funcional</span>
+                  <p>{{ formula.readable }}</p>
+                </div>
+
+                <div class="formula-original">
+                  <span>Dato original del Excel</span>
+                  <code>{{ formula.formula }}</code>
+                </div>
+
+                <div class="reference-strip" *ngIf="formula.references.length">
+                  <span>Referencias usadas</span>
+                  <div>
+                    <span
+                      *ngFor="let reference of formula.references; trackBy: trackReference"
+                      class="reference-pill"
+                      [ngClass]="statusClass(reference)"
+                    >
+                      {{ reference.token }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="example-box" *ngIf="formula.example as example">
+                  <span>{{ example.title }}</span>
+                  <div class="assumption-grid">
+                    <article *ngFor="let assumption of example.assumptions">
+                      <small>{{ assumption.label }}</small>
+                      <strong>{{ assumption.value }}</strong>
+                    </article>
+                  </div>
+                  <code>{{ example.expression }} = {{ example.result }}</code>
+                  <p>{{ example.note }}</p>
+                </div>
+              </div>
+            </mat-expansion-panel>
+          </mat-accordion>
+
+          <div *ngIf="item.formulas.length === 0" class="empty-inline">
+            <mat-icon>info</mat-icon>
+            <span>No hay formulas cargadas en las columnas documentadas para este item.</span>
+          </div>
+        </section>
+
+        <section class="document-grid">
+          <article class="document-section">
+            <div class="section-heading compact">
+              <span class="section-icon">
+                <mat-icon>account_tree</mat-icon>
+              </span>
+              <div>
+                <span>Referencias</span>
+                <h4>Origen de los datos</h4>
+              </div>
+            </div>
+
+            <div class="reference-list" *ngIf="item.references.length; else noReferences">
+              <article *ngFor="let reference of item.references; trackBy: trackReference">
+                <div>
+                  <code>{{ reference.token }}</code>
+                  <span [ngClass]="statusClass(reference)">{{ reference.status }}</span>
+                </div>
+                <strong>{{ reference.label }}</strong>
+                <p>{{ reference.meaning }}</p>
+                <small *ngIf="reference.sheet">{{ reference.sheet }} - fila {{ reference.row }}</small>
+              </article>
+            </div>
+
+            <ng-template #noReferences>
+              <div class="empty-inline">
+                <mat-icon>info</mat-icon>
+                <span>Este item no usa referencias en las formulas analizadas.</span>
+              </div>
+            </ng-template>
+          </article>
+
+          <article class="document-section">
+            <div class="section-heading compact">
+              <span class="section-icon">
+                <mat-icon>schema</mat-icon>
+              </span>
+              <div>
+                <span>Auxiliares involucrados</span>
+                <h4>Detalle de soporte</h4>
+              </div>
+            </div>
+
+            <div class="auxiliary-list" *ngIf="item.auxiliaryDetails.length; else noAuxiliaries">
+              <article *ngFor="let auxiliary of item.auxiliaryDetails">
+                <header>
+                  <code>{{ auxiliary.token }}</code>
+                  <strong>{{ auxiliary.name }}</strong>
+                  <span>{{ auxiliary.type }}</span>
+                </header>
+                <p *ngIf="auxiliary.condition">Condicion: {{ auxiliary.condition }}</p>
+                <p *ngIf="auxiliary.trueFormula">Formula: {{ auxiliary.trueFormula }}</p>
+                <p *ngIf="auxiliary.falseFormula">Caso contrario: {{ auxiliary.falseFormula }}</p>
+                <p *ngIf="auxiliary.value">Valor: {{ auxiliary.value }}</p>
+                <div *ngIf="auxiliary.accumulatorConcepts.length" class="accumulator-list">
+                  <span>Conceptos del acumulador</span>
+                  <small *ngFor="let concept of auxiliary.accumulatorConcepts">
+                    {{ concept.operation || 'Operacion' }} - {{ concept.conceptId }} {{ concept.conceptName }}
+                  </small>
+                </div>
+              </article>
+            </div>
+
+            <ng-template #noAuxiliaries>
+              <div class="empty-inline">
+                <mat-icon>info</mat-icon>
+                <span>No hay auxiliares directos para detallar en esta ficha.</span>
+              </div>
+            </ng-template>
+          </article>
+        </section>
+
+        <section class="document-section notes-section">
+          <div class="section-heading compact">
+            <span class="section-icon">
+              <mat-icon>checklist</mat-icon>
+            </span>
+            <div>
+              <span>Criterio de revision</span>
+              <h4>Como revisarlo</h4>
+            </div>
+          </div>
+
+          <ul>
+            <li *ngFor="let note of item.reviewNotes">{{ note }}</li>
+          </ul>
+        </section>
+
+        <section class="document-section issues-section" *ngIf="item.relatedIssues.length">
+          <div class="section-heading compact">
+            <span class="section-icon warning">
+              <mat-icon>report_problem</mat-icon>
+            </span>
+            <div>
+              <span>Hallazgos vinculados</span>
+              <h4>Observaciones de auditoria</h4>
+            </div>
+          </div>
+
+          <article *ngFor="let issue of item.relatedIssues">
+            <strong>{{ issue.title }}</strong>
+            <p>{{ issue.message }}</p>
+            <small *ngIf="issue.recommendation">{{ issue.recommendation }}</small>
+          </article>
+        </section>
+      </article>
+    </div>
+  </ng-container>
+
+  <ng-template #emptySelection>
+    <div class="manual-state">
+      <mat-icon>search_off</mat-icon>
+      <strong>No hay items para mostrar</strong>
+      <span>Proba limpiar el buscador o cambiar el filtro.</span>
+    </div>
+  </ng-template>
+</section>

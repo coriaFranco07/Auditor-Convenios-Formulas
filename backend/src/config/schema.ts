@@ -112,7 +112,7 @@ export const workbookSchema: SheetSchema[] = [
     key: 'variables',
     canonicalName: 'Variables de Legajos (2)',
     aliases: ['Variables de Legajo (2)', 'Variables de Legajos'],
-    required: true,
+    required: false,
     minHeaderRow: 1,
     maxHeaderRow: 5,
     columns: [
@@ -154,7 +154,7 @@ export const workbookSchema: SheetSchema[] = [
     key: 'accumulators',
     canonicalName: 'Acumuladores (4)',
     aliases: ['Acumuladores'],
-    required: true,
+    required: false,
     minHeaderRow: 1,
     maxHeaderRow: 3,
     columns: [
@@ -175,7 +175,7 @@ export const workbookSchema: SheetSchema[] = [
     key: 'conventions',
     canonicalName: 'Convenios (5)',
     aliases: ['Convenios'],
-    required: true,
+    required: false,
     minHeaderRow: 1,
     maxHeaderRow: 3,
     columns: [
@@ -185,6 +185,8 @@ export const workbookSchema: SheetSchema[] = [
   },
 ];
 
+export const auditedSheetKeys: SheetKey[] = ['concepts', 'auxiliaries'];
+
 export const documentedCatalogs = {
   activation: ['Automática', 'Manual'],
   scope: ['Mensual', 'Jornal', 'General'],
@@ -193,4 +195,3 @@ export const documentedCatalogs = {
 };
 
 export const formulaReferenceTypes = ['N', 'I', 'A', 'R', 'U', 'L'] as const;
-

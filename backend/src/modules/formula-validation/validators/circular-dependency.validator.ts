@@ -1,7 +1,7 @@
 import { createIssue } from '../domain/issue-factory';
 import { collectEffectiveReferences } from '../domain/formula-analysis';
 import { DependencyNodeDetail, IssueCodes, ValidationIssue } from '../types/validation.types';
-import { AccumulatorRecord, BaseRecord, FormulaCell, WorkbookContext } from '../types/workbook.types';
+import { BaseRecord, FormulaCell, WorkbookContext } from '../types/workbook.types';
 import { ValidationRule } from './validation-rule';
 
 type Graph = Map<string, Set<string>>;
@@ -79,12 +79,6 @@ export class CircularDependencyValidator implements ValidationRule {
         }
         addEdge(owner, `${reference.type}[${reference.id}]`);
       });
-    });
-
-    context.accumulators.forEach((accumulator) => {
-      if (accumulator.id !== undefined && accumulator.conceptId !== undefined) {
-        addEdge(`A[${accumulator.id}]`, `R[${accumulator.conceptId}]`);
-      }
     });
 
     return graph;
@@ -222,15 +216,6 @@ export class CircularDependencyValidator implements ValidationRule {
       return this.detailFromRecord(node, auxiliary);
     }
 
-    const nextType = nextNode?.startsWith('R[') ? 'R' : undefined;
-    const nextId = nextType ? this.nodeId(nextNode!) : undefined;
-    const accumulator =
-      context.accumulators.find((record) => record.id === id && record.conceptId === nextId) ??
-      context.accumulators.find((record) => record.id === id);
-    if (accumulator) {
-      return this.detailFromAccumulator(node, accumulator);
-    }
-
     return {
       node,
       label: node,
@@ -286,23 +271,6 @@ export class CircularDependencyValidator implements ValidationRule {
       row: record.row,
       column: location?.column,
       cell: location?.cell,
-    };
-  }
-
-  private detailFromAccumulator(node: string, record: AccumulatorRecord): DependencyNodeDetail {
-    const location =
-      record.sourceColumns['id'] ??
-      record.sourceColumns['number'] ??
-      record.sourceColumns['code'] ??
-      Object.values(record.sourceColumns)[0];
-    return {
-      node,
-      label: this.label(node, record.name),
-      sheet: record.sheet,
-      row: record.row,
-      column: location?.column,
-      cell: location?.cell,
-      formula: record.conceptId ? `Acumulador compuesto por concepto R[${record.conceptId}]` : undefined,
     };
   }
 

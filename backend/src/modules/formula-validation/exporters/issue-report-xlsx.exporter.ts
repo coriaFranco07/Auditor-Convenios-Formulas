@@ -46,10 +46,10 @@ const buildSummarySheet = (workbook: ExcelJS.Workbook, result: StoredValidationR
     ['Archivo analizado', result.fileName],
     ['Fecha del analisis', formatDate(result.summary.analysisFinishedAt)],
     ['Total de hallazgos', result.summary.totalIssues],
+    ['Tablas auditadas', 'Conceptos y Formulas (1); Calculo Auxiliares (3)'],
     ['Conceptos analizados', result.summary.conceptsAnalyzed],
     ['Formulas analizadas', result.summary.formulasAnalyzed],
     ['Auxiliares analizados', result.summary.auxiliariesAnalyzed],
-    ['Acumuladores analizados', result.summary.accumulatorsAnalyzed],
   ];
 
   summaryRows.forEach((row) => sheet.addRow(row));
@@ -91,20 +91,23 @@ const buildIssuesSheet = (workbook: ExcelJS.Workbook, result: StoredValidationRe
   sheet.addRow(reportHeaders);
   styleHeaderRow(sheet.getRow(1));
 
-  result.issues.forEach((issue, index) => {
+  const reportRows = mergeEquivalentIssueRows(result.issues);
+
+  reportRows.forEach((reportRow, index) => {
+    const { issue } = reportRow;
     const row = sheet.addRow([
       index + 1,
       controlTypeLabel(issue),
-      locationLabel(issue),
+      locationLabel(reportRow),
       issue.sheet ?? 'Tabla no informada',
-      columnLabel(issue),
+      reportRow.columnLabel,
       issue.row ?? '',
       entityLabel(issue),
-      humanizeText(issue.message) ?? issue.title,
+      messageLabel(reportRow),
       impactLabel(issue),
-      recommendationLabel(issue),
+      recommendationReportLabel(reportRow),
       issue.formula ?? issue.invalidFragment ?? '',
-      replacementLabel(issue),
+      replacementReportLabel(reportRow),
     ]);
 
     row.eachCell((cell) => {
@@ -120,6 +123,104 @@ const buildIssuesSheet = (workbook: ExcelJS.Workbook, result: StoredValidationRe
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
   sheet.getColumn('A').alignment = { horizontal: 'center', vertical: 'top' };
   sheet.getColumn('F').alignment = { horizontal: 'center', vertical: 'top' };
+};
+
+interface IssueReportRow {
+  issue: ValidationIssue;
+  issues: ValidationIssue[];
+  columns: string[];
+  columnLabel: string;
+}
+
+const mergeEquivalentIssueRows = (issues: ValidationIssue[]): IssueReportRow[] => {
+  const groups = new Map<string, IssueReportRow>();
+
+  issues.forEach((issue) => {
+    const key = issueReportGroupKey(issue);
+    const column = columnLabel(issue);
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.issues.push(issue);
+      existing.columns = mergeColumns(existing.columns, column);
+      existing.columnLabel = columnListLabel(existing.columns);
+      return;
+    }
+
+    const columns = column ? [column] : [];
+    groups.set(key, {
+      issue,
+      issues: [issue],
+      columns,
+      columnLabel: columnListLabel(columns) || '-',
+    });
+  });
+
+  return Array.from(groups.values());
+};
+
+const issueReportGroupKey = (issue: ValidationIssue): string => {
+  if (isMissingReferenceIssue(issue)) {
+    return [
+      issue.category,
+      issue.code,
+      issue.severity,
+      issue.sheet ?? '',
+      issue.row ?? '',
+      issue.entityType ?? '',
+      issue.entityId ?? '',
+      issue.entityName ?? '',
+      issue.formula ?? '',
+      issue.blocksImport ? '1' : '0',
+    ].join('\u001f');
+  }
+
+  return [
+    issue.code,
+    controlTypeLabel(issue),
+    issue.sheet ?? '',
+    issue.row ?? '',
+    issue.entityType ?? '',
+    issue.entityId ?? '',
+    issue.entityName ?? '',
+    humanizeText(issue.message) ?? issue.title,
+    impactLabel(issue),
+    recommendationLabel(issue),
+    issue.formula ?? issue.invalidFragment ?? '',
+    replacementLabel(issue),
+    issue.invalidFragment ?? '',
+    issue.referenceType ?? '',
+    issue.referenceId ?? '',
+    issue.blocksImport ? '1' : '0',
+  ].join('\u001f');
+};
+
+const mergeColumns = (columns: string[], column: string): string[] => {
+  const unique = new Set([...columns, column].filter((value) => value && value !== '-'));
+  return Array.from(unique).sort(compareColumnLabels);
+};
+
+const compareColumnLabels = (left: string, right: string): number => columnNumber(left) - columnNumber(right);
+
+const columnNumber = (column: string): number =>
+  column
+    .toUpperCase()
+    .split('')
+    .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+
+const columnListLabel = (columns: string[]): string => {
+  const cleanColumns = columns.filter((column) => column && column !== '-');
+  if (cleanColumns.length === 0) {
+    return '-';
+  }
+  if (cleanColumns.length === 1) {
+    return cleanColumns[0];
+  }
+  if (cleanColumns.length === 2) {
+    return `${cleanColumns[0]} y ${cleanColumns[1]}`;
+  }
+
+  return `${cleanColumns.slice(0, -1).join(', ')} y ${cleanColumns[cleanColumns.length - 1]}`;
 };
 
 const styleHeaderRow = (row: ExcelJS.Row): void => {
@@ -139,11 +240,11 @@ const thinBorder = (): Partial<ExcelJS.Borders> => ({
   right: { style: 'thin', color: { argb: 'FFDCE6F4' } },
 });
 
-const locationLabel = (issue: ValidationIssue): string =>
+const locationLabel = (reportRow: IssueReportRow): string =>
   [
-    issue.sheet ?? 'Tabla no informada',
-    `Columna ${columnLabel(issue)}`,
-    issue.row ? `Fila ${issue.row}` : undefined,
+    reportRow.issue.sheet ?? 'Tabla no informada',
+    `${reportRow.columns.length > 1 ? 'Columnas' : 'Columna'} ${reportRow.columnLabel}`,
+    reportRow.issue.row ? `Fila ${reportRow.issue.row}` : undefined,
   ]
     .filter(Boolean)
     .join(' > ');
@@ -183,13 +284,23 @@ const controlTypeLabel = (issue: ValidationIssue): string => {
   if (issue.category.startsWith('FORMULA') || issue.category === 'FORMULA_TYPE') {
     return 'Errores de formulas';
   }
-  if (issue.category === 'AUXILIARIES' || issue.category === 'ACCUMULATORS') {
+  if (issue.category === 'AUXILIARIES') {
     return 'Controles de soporte';
   }
   if (issue.category === 'WORKBOOK_STRUCTURE' || issue.category === 'CATALOGS') {
     return 'Errores del Excel';
   }
   return 'Errores de carga de datos';
+};
+
+const messageLabel = (reportRow: IssueReportRow): string => {
+  const missingReferences = missingReferenceFragments(reportRow);
+  if (missingReferences.length <= 1) {
+    return humanizeText(reportRow.issue.message) ?? reportRow.issue.title;
+  }
+
+  const targetLabel = referenceTargetsLabel(reportRow.issues);
+  return `La formula contiene referencias inexistentes: ${textListLabel(missingReferences)}. No existen en ${targetLabel}.`;
 };
 
 const impactLabel = (issue: ValidationIssue): string => {
@@ -199,6 +310,17 @@ const impactLabel = (issue: ValidationIssue): string => {
   return humanizeText(issue.explanation) ?? 'Puede afectar la correcta interpretacion de la formula o del dato cargado.';
 };
 
+const recommendationReportLabel = (reportRow: IssueReportRow): string => {
+  const missingReferences = missingReferenceFragments(reportRow);
+  if (missingReferences.length <= 1) {
+    return recommendationLabel(reportRow.issue);
+  }
+
+  return `Revisar juntas las referencias faltantes ${textListLabel(
+    missingReferences,
+  )}. Crear las definiciones faltantes o corregir los identificadores usados en la formula indicada.`;
+};
+
 const recommendationLabel = (issue: ValidationIssue): string => {
   if (issue.aiExplanation?.suggestedAction) {
     return issue.aiExplanation.suggestedAction;
@@ -206,12 +328,77 @@ const recommendationLabel = (issue: ValidationIssue): string => {
   return humanizeText(issue.recommendation) ?? 'Revisar la fila indicada y corregir el dato segun la definicion esperada.';
 };
 
+const replacementReportLabel = (reportRow: IssueReportRow): string =>
+  uniqueText(reportRow.issues.map(replacementLabel)).filter(Boolean).join('\n');
+
 const replacementLabel = (issue: ValidationIssue): string => {
   const suggestion = issue.replacementSuggestions?.[0];
   if (!suggestion) {
     return '';
   }
   return `${issue.invalidFragment ?? 'Referencia'} -> ${suggestion.token}. ${suggestion.reason}`;
+};
+
+const isMissingReferenceIssue = (issue: ValidationIssue): boolean =>
+  issue.category === 'REFERENCES' &&
+  Boolean(issue.invalidFragment) &&
+  [
+    'MISSING_AUXILIARY_REFERENCE',
+    'MISSING_CONCEPT_REFERENCE',
+    'MISSING_LEG_VARIABLE_REFERENCE',
+  ].includes(issue.code);
+
+const missingReferenceFragments = (reportRow: IssueReportRow): string[] => {
+  if (!reportRow.issues.every(isMissingReferenceIssue)) {
+    return [];
+  }
+  return uniqueText(reportRow.issues.map((issue) => issue.invalidFragment ?? ''));
+};
+
+const referenceTargetsLabel = (issues: ValidationIssue[]): string => {
+  const labels = uniqueText(issues.map(referenceTargetName));
+  if (labels.length === 1) {
+    return `la tabla de ${labels[0]}`;
+  }
+  return `las tablas correspondientes (${textListLabel(labels)})`;
+};
+
+const referenceTargetName = (issue: ValidationIssue): string => {
+  if (issue.referenceType === 'A') {
+    return 'calculo auxiliar';
+  }
+  if (issue.referenceType === 'L') {
+    return 'variable de legajo';
+  }
+  if (issue.referenceType === 'N' || issue.referenceType === 'I') {
+    return 'novedad/concepto';
+  }
+  return 'concepto';
+};
+
+const uniqueText = (values: string[]): string[] => {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const cleanValue = value.trim();
+    if (!cleanValue || seen.has(cleanValue)) {
+      return false;
+    }
+    seen.add(cleanValue);
+    return true;
+  });
+};
+
+const textListLabel = (values: string[]): string => {
+  if (values.length === 0) {
+    return '';
+  }
+  if (values.length === 1) {
+    return values[0];
+  }
+  if (values.length === 2) {
+    return `${values[0]} y ${values[1]}`;
+  }
+  return `${values.slice(0, -1).join(', ')} y ${values[values.length - 1]}`;
 };
 
 const humanizeText = (value?: string): string | undefined =>

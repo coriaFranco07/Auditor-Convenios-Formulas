@@ -62,6 +62,15 @@ export class ValidationController {
     }
   };
 
+  manual = async (request: Request, response: Response): Promise<void> => {
+    const manual = await this.service.manual(request.params.validationId);
+    if (!manual) {
+      response.status(404).json({ message: 'Manual no disponible para este analisis.' });
+      return;
+    }
+    response.json(manual);
+  };
+
   exportJson = async (request: Request, response: Response): Promise<void> => {
     const result = await this.service.get(request.params.validationId);
     if (!result) {

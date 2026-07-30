@@ -1,7 +1,22 @@
 import path from 'node:path';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
+import type SuperAgentResponse from 'superagent/lib/node/response';
 import { createApp } from '../src/app';
 import { createWorkbookFixture } from './helpers/workbook-fixture';
+
+const parseBinaryResponse = (
+  response: SuperAgentResponse,
+  callback: (error: Error | null, body?: Buffer) => void,
+): void => {
+  const chunks: Buffer[] = [];
+
+  response.on('data', (chunk: Buffer | string) => {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  response.on('end', () => callback(null, Buffer.concat(chunks)));
+  response.on('error', callback);
+};
 
 describe('Validation API', () => {
   const app = createApp();
@@ -52,6 +67,42 @@ describe('Validation API', () => {
     expect(history.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id })]));
   });
 
+  it('genera el manual explicativo de conceptos y auxiliares', async () => {
+    const buffer = await createWorkbookFixture({
+      missingReference: true,
+      pdfFunctionalIssues: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'manual.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const manual = await request(app).get(`/api/validations/${response.body.id}/manual`).expect(200);
+    expect(manual.body.totals.concepts).toBeGreaterThan(0);
+    expect(manual.body.totals.auxiliaries).toBeGreaterThan(0);
+
+    const sueldoBasico = manual.body.items.find(
+      (item: { entityType?: string; entityId?: number }) => item.entityType === 'CONCEPT' && item.entityId === 1,
+    );
+    expect(sueldoBasico).toEqual(expect.objectContaining({ name: 'SUELDO BASICO' }));
+    expect(sueldoBasico.formulas.some((formula: { title?: string }) => formula.title === 'Unidad mensual')).toBe(true);
+    expect(sueldoBasico.references).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ token: 'A[6]', status: 'No encontrada' }),
+        expect.objectContaining({ token: 'N[1]', status: 'Novedad externa' }),
+      ]),
+    );
+
+    const auxiliary = manual.body.items.find(
+      (item: { entityType?: string; entityId?: number }) => item.entityType === 'AUXILIARY' && item.entityId === 31,
+    );
+    expect(auxiliary.summary).toContain('Formula');
+    expect(auxiliary.references).toEqual(expect.arrayContaining([expect.objectContaining({ token: 'L[10]' })]));
+  });
+
   it('rechaza extension invalida', async () => {
     await request(app)
       .post('/api/validations')
@@ -85,7 +136,7 @@ describe('Validation API', () => {
   });
 
   it('detecta hoja faltante', async () => {
-    const buffer = await createWorkbookFixture({ omitVariablesSheet: true });
+    const buffer = await createWorkbookFixture({ omitAuxiliariesSheet: true });
     const response = await request(app)
       .post('/api/validations')
       .attach('file', buffer, {
@@ -104,7 +155,6 @@ describe('Validation API', () => {
       selfReference: true,
       indirectCycle: true,
       invalidAuxiliary: true,
-      incompleteAccumulator: true,
     });
     const response = await request(app)
       .post('/api/validations')
@@ -119,7 +169,6 @@ describe('Validation API', () => {
     expect(codes).toContain('SELF_REFERENCE');
     expect(codes).toContain('CIRCULAR_DEPENDENCY');
     expect(codes).toContain('INVALID_AUXILIARY_ROW');
-    expect(codes).toContain('INVALID_ACCUMULATOR_ROW');
   });
 
   it('no trata el numero repetido de conceptos como duplicado', async () => {
@@ -177,8 +226,6 @@ describe('Validation API', () => {
     expect(codes).toContain('TOTALIZES_VALUE_INVALID');
     expect(codes).toContain('AUXILIARY_VALUE_MISSING');
     expect(codes).toContain('AUXILIARY_ACCUMULATOR_HAS_FORMULA');
-    expect(codes).toContain('ACCUMULATOR_CONCEPT_NAME_MISMATCH');
-    expect(codes).toContain('ACCUMULATOR_CONTRADICTORY_OPERATION');
   });
 
   it('no marca condiciones que usan resultados calculados como problema de auditoria', async () => {
@@ -198,7 +245,7 @@ describe('Validation API', () => {
     expect(codes).not.toContain('CALCULATION_ORDER_REVIEW');
   });
 
-  it('no marca diferencia de nombre si el acumulador coincide con uno de los conceptos repetidos', async () => {
+  it('no usa la hoja Acumuladores para comparar nombres de conceptos', async () => {
     const buffer = await createWorkbookFixture({
       repeatedConceptNameForAccumulator: true,
     });
@@ -215,6 +262,34 @@ describe('Validation API', () => {
         issue.code === 'ACCUMULATOR_CONCEPT_NAME_MISMATCH' && issue.referenceId === 445,
     );
     expect(accumulatorNameMismatch).toEqual([]);
+  });
+
+  it('no valida la hoja Acumuladores porque no contiene formulas auditables', async () => {
+    const buffer = await createWorkbookFixture({
+      incompleteAccumulator: true,
+      pdfFunctionalIssues: true,
+      repeatedConceptNameForAccumulator: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'acumuladores-fuera-de-alcance.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const accumulatorIssues = response.body.issues.filter(
+      (issue: { category?: string; entityType?: string; code?: string }) =>
+        issue.category === 'ACCUMULATORS' ||
+        issue.entityType === 'ACCUMULATOR' ||
+        issue.code === 'INVALID_ACCUMULATOR_ROW' ||
+        issue.code === 'MISSING_ACCUMULATOR_ID' ||
+        issue.code === 'ACCUMULATOR_CONCEPT_NAME_MISMATCH' ||
+        issue.code === 'ACCUMULATOR_CONTRADICTORY_OPERATION',
+    );
+
+    expect(accumulatorIssues).toEqual([]);
+    expect(response.body.summary.accumulatorsAnalyzed).toBe(0);
   });
 
   it('no marca N/I como referencias faltantes porque son novedades externas al Excel', async () => {
@@ -255,6 +330,77 @@ describe('Validation API', () => {
         issue.invalidFragment === 'U[999]',
     );
     expect(repeatedReferenceIssues).toHaveLength(1);
+  });
+
+  it('consolida en el reporte Excel los mismos errores encontrados en varias columnas', async () => {
+    const buffer = await createWorkbookFixture({
+      sameMissingReferenceAcrossColumns: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'columnas-repetidas.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const issueReport = await request(app)
+      .get(`/api/validations/${response.body.id}/export/issues-xlsx`)
+      .buffer(true)
+      .parse(parseBinaryResponse)
+      .expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(issueReport.body);
+
+    const sheet = workbook.getWorksheet('Errores detectados');
+    const rows = sheet
+      ? sheet
+          .getRows(2, sheet.rowCount - 1)
+          ?.filter((row) => String(row.getCell(8).value ?? '').includes('A[6]')) ?? []
+      : [];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].getCell(3).value).toBe('Conceptos y Formulas (1) > Columnas F y J > Fila 3');
+    expect(rows[0].getCell(5).value).toBe('F y J');
+  });
+
+  it('consolida en el reporte Excel varias referencias faltantes de una misma formula', async () => {
+    const buffer = await createWorkbookFixture({
+      multipleMissingReferencesInOneFormula: true,
+    });
+    const response = await request(app)
+      .post('/api/validations')
+      .attach('file', buffer, {
+        filename: 'referencias-multiples.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201);
+
+    const issueReport = await request(app)
+      .get(`/api/validations/${response.body.id}/export/issues-xlsx`)
+      .buffer(true)
+      .parse(parseBinaryResponse)
+      .expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(issueReport.body);
+
+    const sheet = workbook.getWorksheet('Errores detectados');
+    const rows = sheet
+      ? sheet
+          .getRows(2, sheet.rowCount - 1)
+          ?.filter(
+            (row) =>
+              row.getCell(2).value === 'Referencias no encontradas' &&
+              String(row.getCell(7).value ?? '').includes('MULTIPLES REFERENCIAS'),
+          ) ?? []
+      : [];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].getCell(3).value).toBe('Conceptos y Formulas (1) > Columna F > Fila 4');
+    expect(rows[0].getCell(5).value).toBe('F');
+    expect(String(rows[0].getCell(8).value)).toContain('R[991]');
+    expect(String(rows[0].getCell(8).value)).toContain('R[992]');
+    expect(String(rows[0].getCell(8).value)).toContain('R[993]');
   });
 
   it('no marca texto de Pre/Post Formula como formula invalida', async () => {

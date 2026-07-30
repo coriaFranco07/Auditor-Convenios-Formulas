@@ -1,4 +1,4 @@
-import { workbookSchema } from '../../../config/schema';
+import { auditedSheetKeys, workbookSchema } from '../../../config/schema';
 import { createIssue } from '../domain/issue-factory';
 import { isBlank, toNumberId } from '../domain/normalization';
 import { IssueCodes, ValidationIssue } from '../types/validation.types';
@@ -6,6 +6,8 @@ import { BaseRecord, WorkbookContext } from '../types/workbook.types';
 import { ValidationRule } from './validation-rule';
 
 export class WorkbookStructureValidator implements ValidationRule {
+  private readonly auditedSheets = new Set(auditedSheetKeys);
+
   validate(context: WorkbookContext): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
 
@@ -17,14 +19,17 @@ export class WorkbookStructureValidator implements ValidationRule {
           category: 'WORKBOOK_STRUCTURE',
           title: 'Hoja obligatoria ausente',
           message: `No se encontro la hoja obligatoria "${sheet}".`,
-          explanation: 'El archivo no puede analizarse correctamente sin todas las hojas del esquema.',
-          recommendation: 'Verificar que el archivo exportado incluya todas las hojas requeridas.',
+          explanation: 'El archivo no puede auditar formulas sin las hojas donde se cargan conceptos o calculos auxiliares.',
+          recommendation: 'Verificar que el Excel incluya Conceptos y Formulas (1) y Calculo Auxiliares (3).',
           entityType: 'WORKBOOK',
         }),
       );
     });
 
     workbookSchema.forEach((schema) => {
+      if (!this.auditedSheets.has(schema.key)) {
+        return;
+      }
       const sheet = context.sheets[schema.key];
       if (!sheet) {
         return;
@@ -87,33 +92,9 @@ export class WorkbookStructureValidator implements ValidationRule {
 
     [
       ...context.concepts,
-      ...context.variables,
       ...context.auxiliaries,
-      ...context.conventions,
     ].forEach((record) => {
       issues.push(...this.validateBaseRecord(record));
-    });
-
-    context.accumulators.forEach((record) => {
-      issues.push(...this.validateBaseRecord(record, false));
-      if (record.conceptId === undefined && !isBlank(record.originalValues.conceptId)) {
-        issues.push(
-          createIssue({
-            code: IssueCodes.INVALID_IDENTIFIER,
-            severity: 'ERROR',
-            category: 'WORKBOOK_STRUCTURE',
-            title: 'Concepto integrante invalido',
-            message: `La fila ${record.row} no tiene un codigo de concepto numerico.`,
-            explanation: 'Los acumuladores deben apuntar a un concepto por identificador numerico.',
-            recommendation: 'Corregir el codigo del concepto integrante.',
-            location: record.sourceColumns.conceptId,
-            entityType: 'ACCUMULATOR',
-            entityId: record.id,
-            entityName: record.name,
-            blocksImport: true,
-          }),
-        );
-      }
     });
 
     return issues;
@@ -180,4 +161,3 @@ export class WorkbookStructureValidator implements ValidationRule {
     return issues;
   }
 }
-

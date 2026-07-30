@@ -33,9 +33,8 @@
   <section class="main-shell">
     <header class="command-bar">
       <div class="command-title">
-        <span *ngIf="activeView === 'translator' && currentModule.caption" class="eyebrow-label">{{ currentModule.caption }}</span>
         <h1>{{ currentModule.title }}</h1>
-        <span *ngIf="activeView !== 'translator' && currentModule.caption">{{ currentModule.caption }}</span>
+        <span *ngIf="currentModule.caption">{{ currentModule.caption }}</span>
       </div>
 
       <div class="command-actions">
@@ -86,8 +85,8 @@
         </article>
       </section>
 
-      <section *ngSwitchCase="'translator'" class="tool-workspace">
-        <app-formula-translator *ngIf="result" [issues]="result.issues"></app-formula-translator>
+      <section *ngSwitchCase="'manual'" class="tool-workspace">
+        <app-formula-manual *ngIf="result" [validationId]="result.id"></app-formula-manual>
       </section>
 
       <section *ngSwitchCase="'history'" class="history-workspace">

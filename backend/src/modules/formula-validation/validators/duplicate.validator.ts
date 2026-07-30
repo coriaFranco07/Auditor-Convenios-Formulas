@@ -10,7 +10,6 @@ export class DuplicateValidator implements ValidationRule {
     const issues: ValidationIssue[] = [];
     // Concept sheet numbers are liquidation order values, so they can repeat.
     issues.push(...this.validateEntityDuplicates('AUXILIARY', context.auxiliaries));
-    issues.push(...this.validateAccumulatorDuplicates(context));
     return issues;
   }
 
@@ -78,41 +77,5 @@ export class DuplicateValidator implements ValidationRule {
       return names.join(' / ');
     }
     return `${names.slice(0, 3).join(' / ')} / ...`;
-  }
-
-  private validateAccumulatorDuplicates(context: WorkbookContext): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const groups = new Map<string, typeof context.accumulators>();
-    context.accumulators.forEach((record) => {
-      const key = `${record.id ?? 'sin-id'}|${record.conceptId ?? 'sin-concepto'}|${record.operation ?? ''}`;
-      const current = groups.get(key) ?? [];
-      current.push(record);
-      groups.set(key, current);
-    });
-    groups.forEach((records) => {
-      if (records.length < 2) {
-        return;
-      }
-      const first = records[0];
-      const relatedLocations = records.map((record) => record.sourceColumns.id).filter(Boolean);
-      issues.push(
-        createIssue({
-          code: IssueCodes.DUPLICATE_IDENTICAL,
-          severity: 'WARNING',
-          category: 'ACCUMULATORS',
-          title: 'Registro de acumulador duplicado',
-          message: `El acumulador ${first.id} repite el concepto ${first.conceptId} con operacion ${first.operation}.`,
-          explanation: 'La misma combinacion de acumulador, concepto y operacion aparece mas de una vez.',
-          recommendation: 'Confirmar si la repeticion es intencional; si no, eliminar la fila duplicada.',
-          location: first.sourceColumns.id,
-          entityType: 'ACCUMULATOR',
-          entityId: first.id,
-          entityName: first.name,
-          relatedLocations,
-          blocksImport: false,
-        }),
-      );
-    });
-    return issues;
   }
 }
